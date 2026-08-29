@@ -41,9 +41,6 @@ gem "neighbor"
 #Background processing gem
 gem "sidekiq", "~> 6.5"
 
-#Testing framework gem
-gem "rspec-rails"
-
 #LLM Gem
 gem "ruby_llm-voyage"
 
@@ -60,4 +57,9 @@ group :development, :test do
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
+end
+
+group :test do
+  #Testing framework gem
+  gem "rspec-rails"
 end
