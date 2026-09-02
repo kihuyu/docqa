@@ -42,7 +42,7 @@ gem "neighbor"
 gem "sidekiq", "~> 6.5"
 
 #LLM Gem
-gem "ruby_llm-voyage"
+gem "anthropic"
 
 
 group :development, :test do
