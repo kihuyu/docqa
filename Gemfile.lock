@@ -75,11 +75,6 @@ GEM
       securerandom (>= 0.3)
       tzinfo (~> 2.0, >= 2.0.5)
       uri (>= 0.13.1)
-    anthropic (1.68.0)
-      base64 (~> 0.1)
-      cgi (~> 0.1)
-      connection_pool (>= 2, < 4)
-      standardwebhooks (~> 1.0)
     ast (2.4.3)
     base64 (0.3.0)
     bcrypt_pbkdf (1.1.2)
@@ -94,7 +89,6 @@ GEM
     bundler-audit (0.9.3)
       bundler (>= 1.2.0)
       thor (~> 1.0)
-    cgi (0.5.2)
     concurrent-ruby (1.3.8)
     connection_pool (3.0.2)
     crass (1.0.7)
@@ -268,7 +262,6 @@ GEM
       prism (>= 1.6.0)
       rbs (>= 4.0.0)
       tsort
-    redis (4.8.1)
     regexp_parser (2.12.0)
     reline (0.7.0)
       io-console (~> 0.5)
@@ -322,10 +315,6 @@ GEM
       ffi (~> 1.12)
       logger
     securerandom (0.4.1)
-    sidekiq (6.5.7)
-      connection_pool (>= 2.2.5)
-      rack (~> 2.0)
-      redis (>= 4.5.0, < 5)
     solid_cable (3.0.12)
       actioncable (>= 7.2)
       activejob (>= 7.2)
@@ -349,7 +338,6 @@ GEM
       net-sftp (>= 2.1.2)
       net-ssh (>= 2.8.0)
       ostruct
-    standardwebhooks (1.0.1)
     thor (1.5.0)
     thruster (0.1.26)
     thruster (0.1.26-aarch64-linux)
@@ -385,7 +373,6 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
-  anthropic
   bootsnap
   brakeman
   bundler-audit
@@ -398,7 +385,6 @@ DEPENDENCIES
   rails (~> 8.1.3, >= 8.1.3.1)
   rspec-rails
   rubocop-rails-omakase
-  sidekiq (~> 6.5)
   solid_cable
   solid_cache
   solid_queue
