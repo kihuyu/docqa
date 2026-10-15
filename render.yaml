@@ -13,8 +13,9 @@ services:
     runtime: docker
     plan: free
     healthCheckPath: /health
-    # Migrate on boot: pre-deploy commands aren't available on the free plan.
-    dockerCommand: sh -c "bin/rails db:prepare && bundle exec puma -C config/puma.rb"
+    # Migrates, then starts Puma (see bin/docker-start). Pre-deploy commands
+    # aren't available on the free plan, so migrations run on boot.
+    dockerCommand: ./bin/docker-start
     envVars:
       - key: RAILS_ENV
         value: production
@@ -30,4 +31,4 @@ services:
       # it out. If set, it takes precedence over credentials.
       - key: RAILS_MASTER_KEY
         sync: false   # set in the dashboard: contents of config/master.key
-                      # (decrypts config/credentials.yml.enc, which holds gemini.api_key)
+        # (decrypts config/credentials.yml.enc, which holds gemini.api_key)
