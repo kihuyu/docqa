@@ -1,0 +1,11 @@
+#!/bin/sh
+# Container start command (Render, Docker). A script instead of an inline
+# `sh -c "..."` so no host has to get the quoting right.
+set -e
+
+# Create or migrate the database. Safe to run on every boot.
+bin/rails db:prepare
+
+# exec: Puma becomes the main process, so it receives the platform's stop
+# signal directly and shuts down cleanly.
+exec bundle exec puma -C config/puma.rb
