@@ -1,0 +1,15 @@
+# Never bake secrets into the image. The host provides RAILS_MASTER_KEY instead.
+/config/master.key
+/config/credentials/*.key
+/.env
+/.env.*
+
+# Not needed at runtime
+/.git/
+/.github/
+/log/*
+/tmp/*
+/spec/
+/coverage/
+/node_modules/
+*.zip
