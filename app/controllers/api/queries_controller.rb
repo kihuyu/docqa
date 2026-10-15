@@ -4,6 +4,15 @@ module Api
   class QueriesController < ApplicationController
     MAX_QUESTION_CHARS = AppSetting.integer(:limits, :max_question_chars,
                                             env: "MAX_QUESTION_CHARS", default: 1000)
+
+    # Each question costs a Gemini call: cap each visitor, and the whole site.
+    rate_limit to: AppSetting.integer(:limits, :questions_per_minute, default: 10), within: 1.minute,
+               only: :create, name: "questions-per-visitor",
+               store: RATE_LIMIT_STORE, with: -> { render_rate_limited }
+    rate_limit to: AppSetting.integer(:limits, :questions_per_day, default: 500), within: 1.day,
+               by: -> { "site" }, only: :create, name: "questions-site-wide",
+               store: RATE_LIMIT_STORE, with: -> { render_rate_limited(site_wide: true) }
+
     # POST /api/queries
     def create
       question = params.require(:question).to_s.strip
