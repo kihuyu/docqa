@@ -228,7 +228,7 @@
     <section class="sheet" aria-live="polite">
         <form id="compose">
             <h2>Add a document</h2>
-            <p class="lede">Paste any text — a policy, a manual, meeting notes. It's split into passages and indexed, then you can ask about it. Use public or made-up text only.</p>
+            <p class="lede">Paste any text — a policy, a manual, meeting notes. It's split into passages and indexed, then you can ask about it. This is a public demo: anyone can open what you add, and it's deleted after 24 hours. Use public or made-up text only.</p>
             <div class="field">
                 <label for="title">Title</label>
                 <input id="title" name="title" required maxlength="300" autocomplete="off">
@@ -619,6 +619,7 @@ Tents, packs and sleeping bags carry a 2-year warranty against manufacturing def
             els.addBtn.textContent = "Add document";
 
             if (!ok) {
+                if (status === 429) { setNote(els.composeError, "amber", data.detail); return; }
                 const msg = status === 422 ? "The document couldn't be added." : "Couldn't add the document.";
                 setNote(els.composeError, "red", msg, data.detail);
                 return;
@@ -669,6 +670,7 @@ Tents, packs and sleeping bags carry a 2-year warranty against manufacturing def
 
             if (!ok) {
                 answerText.textContent = "";
+                if (status === 429) { item.node.append(noteEl("amber", data.detail)); return; }
                 const messages = {
                     409: "This document is still being indexed. Ask again when it's done.",
                     422: "Questions need to be between 1 and 1,000 characters.",
@@ -704,12 +706,13 @@ Tents, packs and sleeping bags carry a 2-year warranty against manufacturing def
             const forDoc = doc.id;
             els.summarize.disabled = true;
             els.summarize.textContent = "Summarizing…";
-            const { ok, data } = await api("POST", `/api/documents/${forDoc}/summary`);
+            const { ok, status, data } = await api("POST", `/api/documents/${forDoc}/summary`);
             if (!doc || doc.id !== forDoc) return;
             els.summarize.disabled = false;
             els.summarize.textContent = "Summarize";
 
             if (!ok) {
+                if (status === 429) { els.summary.replaceChildren(noteEl("amber", data.detail)); return; }
                 els.summary.replaceChildren(noteEl("red", "The summary couldn't be created. Try again in a minute.", data.detail));
                 return;
             }
