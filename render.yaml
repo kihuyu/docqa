@@ -21,6 +21,12 @@ services:
         value: production
       - key: SOLID_QUEUE_IN_PUMA
         value: "1"
+      # Run Puma as ONE process. Render defaults WEB_CONCURRENCY to 1, which
+      # puts Puma in cluster mode; the Solid Queue plugin then starts from the
+      # cluster's parent process, where Rails isn't loaded, and crashes with
+      # "uninitialized constant SolidQueue". Single mode also saves memory.
+      - key: WEB_CONCURRENCY
+        value: "0"
       - key: RAILS_MAX_THREADS
         value: "3"
       - key: DB_POOL
