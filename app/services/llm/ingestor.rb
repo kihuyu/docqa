@@ -8,12 +8,15 @@ module Llm
     OVERLAP    = 100    # keep some context across chunk boundaries
 
     def call(title:, content:)
-      document = Document.create!(title: title, content: content, status: "processing")
-
-      chunks_for(content).each do |text|
-        document.chunks.create!(content: text)
+      # All-or-nothing: a failure part-way through never leaves a document with
+      # half its chunks saved.
+      document = Document.transaction do
+        doc = Document.create!(title: title, content: content, status: "processing")
+        chunks_for(content).each { |text| doc.chunks.create!(content: text) }
+        doc
       end
 
+      # Enqueue only after the rows are committed, so the job can always see them.
       EmbedChunksJob.perform_later(document.id)
       document
     end
