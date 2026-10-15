@@ -20,7 +20,10 @@ COPY Gemfile Gemfile.lock ./
 RUN bundle install && rm -rf ~/.bundle/ /usr/local/bundle/cache
 
 COPY . .
-RUN bundle exec bootsnap precompile app/ lib/ 2>/dev/null || true
+# Git on Windows can drop the executable bit, so set it here.
+RUN chmod +x bin/* && \
+    (bundle exec bootsnap precompile app/ lib/ 2>/dev/null || true)
 
 EXPOSE 3000
-CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
+# Runs migrations, then Puma.
+CMD ["./bin/docker-start"]
