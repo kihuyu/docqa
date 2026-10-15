@@ -1,0 +1,26 @@
+# PostgreSQL. The pgvector extension must be available to the server;
+# the migration runs `enable_extension "vector"`.
+#
+# A DATABASE_URL environment variable, if set, always takes precedence — Rails
+# merges it in automatically.
+
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # Must cover Puma's threads, and Solid Queue's worker threads + 2 when the
+  # job worker runs (Solid Queue's own guidance).
+  pool: <%= ENV.fetch("DB_POOL") { ENV.fetch("RAILS_MAX_THREADS", 5) } %>
+
+development:
+  <<: *default
+  database: docqa_development
+
+test:
+  <<: *default
+  database: docqa_test
+
+production:
+  <<: *default
+  # Only production reads the URL from credentials, so a production database
+  # in credentials can never be used by development or the test suite.
+  url: <%= Rails.application.credentials.dig(:database, :url) %>
