@@ -1,0 +1,33 @@
+# Render Blueprint — a $0 deployment on Render's free web service.
+#
+# The free tier has no background workers, so Solid Queue runs inside the Puma
+# process (SOLID_QUEUE_IN_PUMA=1). Jobs are stored in Postgres, so if the free
+# instance spins down mid-job, the job resumes on the next boot.
+#
+# Database: use a free Neon Postgres (permanent, supports pgvector) and paste
+# its DIRECT (non-pooled) connection string in credentials as database.url. Render's own free
+# Postgres is deleted after 30 days, so it isn't a good fit here.
+services:
+  - type: web
+    name: docqa
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    # Migrate on boot: pre-deploy commands aren't available on the free plan.
+    dockerCommand: sh -c "bin/rails db:prepare && bundle exec puma -C config/puma.rb"
+    envVars:
+      - key: RAILS_ENV
+        value: production
+      - key: SOLID_QUEUE_IN_PUMA
+        value: "1"
+      - key: RAILS_MAX_THREADS
+        value: "3"
+      - key: DB_POOL
+        value: "5"    # Solid Queue needs worker threads (2) + 2; Puma needs 3
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      # DATABASE_URL is optional: if database.url is in your credentials, leave
+      # it out. If set, it takes precedence over credentials.
+      - key: RAILS_MASTER_KEY
+        sync: false   # set in the dashboard: contents of config/master.key
+                      # (decrypts config/credentials.yml.enc, which holds gemini.api_key)
