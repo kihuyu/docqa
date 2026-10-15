@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DocQA</title>
+    <meta name="description" content="Ask questions about a document. Every answer shows the passages it came from.">
+    <style>
+        :root {
+            --bg: #EEF1F5;
+            --page: #FFFFFF;
+            --ink: #18202E;
+            --muted: #5A6475;
+            --line: #D5DBE4;
+            --cobalt: #2448D8;
+            --cobalt-tint: #E3EAFF;
+            --cobalt-tint-strong: #C9D6FF;
+            --amber: #8A5300;
+            --amber-tint: #FFF1D6;
+            --red: #A3241A;
+            --red-tint: #FDECEA;
+            /* Fonts already on the reader's device; nothing is downloaded.
+               Interface: the operating system's own UI font.
+               Reading text: Charter (macOS/iOS), Sitka or Cambria (Windows), then Georgia. */
+            --serif: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+            --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --radius: 6px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #10141B;
+                --page: #171C25;
+                --ink: #E6EAF1;
+                --muted: #9AA4B5;
+                --line: #2C3442;
+                --cobalt: #8EA8FF;
+                --cobalt-tint: #22305A;
+                --cobalt-tint-strong: #2E4280;
+                --amber: #F2C26B;
+                --amber-tint: #3A2C12;
+                --red: #FF9C92;
+                --red-tint: #3D1C1A;
+            }
+        }
+
+        * { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font: 16px/1.5 var(--sans);
+        }
+        button, input, textarea, select { font: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+        .visually-hidden {
+            position: absolute; width: 1px; height: 1px; overflow: hidden;
+            clip: rect(0 0 0 0); white-space: nowrap;
+        }
+
+        /* ---------- top bar ---------- */
+        .bar {
+            display: flex; align-items: center; gap: 16px;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--line);
+            background: var(--page);
+        }
+        .wordmark {
+            font-weight: 700; font-size: 1.125rem; margin: 0;
+        }
+        .tagline { color: var(--muted); font-size: 0.9375rem; margin: 0; }
+        .bar-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+        .bar select {
+            max-width: 240px; padding: 6px 8px;
+            border: 1px solid var(--line); border-radius: var(--radius); background: var(--page);
+        }
+
+        /* ---------- buttons ---------- */
+        .btn {
+            border: 1px solid var(--cobalt); background: var(--cobalt); color: #fff;
+            padding: 8px 16px; border-radius: var(--radius); cursor: pointer; font-weight: 700;
+        }
+        @media (prefers-color-scheme: dark) { .btn { color: #0E1630; } }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn-quiet {
+            border: 1px solid var(--line); background: transparent; color: var(--ink);
+            padding: 7px 14px; border-radius: var(--radius); cursor: pointer; white-space: nowrap;
+        }
+        .btn-quiet:hover { border-color: var(--muted); }
+        .link {
+            border: 0; background: none; padding: 0; color: var(--cobalt);
+            text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+        }
+
+        /* ---------- layout ---------- */
+        .layout {
+            display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+            gap: 24px; max-width: 1240px; margin: 0 auto; padding: 24px;
+            align-items: start;
+        }
+        .sheet {
+            background: var(--page); border: 1px solid var(--line); border-radius: 8px;
+            padding: 32px 40px 40px;
+        }
+        .side { position: sticky; top: 24px; display: grid; gap: 16px; }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; padding: 16px; }
+            .sheet { padding: 24px 20px 28px; }
+            .side { position: static; order: -1; }
+            .bar { flex-wrap: wrap; padding: 12px 16px; }
+            .bar-actions { margin-left: 0; width: 100%; }
+            .bar select { flex: 1; max-width: none; min-width: 0; }
+            .tagline { display: none; }
+        }
+
+        /* ---------- add document ---------- */
+        h2 { font-weight: 700; font-size: 1.375rem; line-height: 1.3; margin: 0 0 8px; }
+        h3 { font-size: 1rem; margin: 0 0 8px; }
+        .lede { color: var(--muted); margin: 0 0 24px; max-width: 60ch; }
+        label { display: block; font-weight: 700; margin: 0 0 6px; }
+        .field { margin-bottom: 20px; }
+        .field input, .field textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+            border-radius: var(--radius); background: var(--page);
+        }
+        .field textarea { min-height: 320px; resize: vertical; font-family: var(--serif); line-height: 1.6; }
+        .hint { color: var(--muted); font-size: 0.875rem; margin: 6px 0 0; }
+        .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+
+        /* ---------- reader ---------- */
+        .doc-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
+        .doc-head h2 { margin: 0; flex: 1; }
+        .doc-text {
+            font-family: var(--serif); font-size: 1.0625rem; line-height: 1.75;
+            white-space: pre-wrap; overflow-wrap: anywhere; max-width: 68ch; margin: 0;
+        }
+        /* Cited passages: an even tint on every wrapped line, with a numbered badge
+           where each passage starts, matching the "Passage n" buttons. */
+        .doc-text mark {
+            background: var(--cobalt-tint); color: inherit;
+            padding: 2px 0;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
+            transition: background-color 400ms ease;
+        }
+        .doc-text mark.flash { background: var(--cobalt-tint-strong); }
+        .doc-text .badge {
+            display: inline-block; min-width: 1.4em; margin-right: 6px; padding: 0 5px;
+            font: 700 0.75rem/1.5 var(--sans); text-align: center; vertical-align: 0.1em;
+            color: var(--page); background: var(--cobalt); border-radius: 999px;
+        }
+
+        .progress { margin: 0 0 24px; }
+        .progress p { margin: 0 0 8px; color: var(--muted); }
+        .track { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+        .fill { height: 100%; width: 0; background: var(--cobalt); transition: width 400ms ease; }
+
+        /* Shown when indexing makes no progress for a while. */
+        .stall { margin: 16px 0 0; }
+        .stall p { margin: 0 0 8px; color: inherit; }
+        .stall p:last-child { margin-bottom: 0; }
+        .cmd { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; }
+        .cmd code {
+            flex: 1; min-width: 0; padding: 8px 10px; border-radius: 4px;
+            background: var(--page); color: var(--ink); border: 1px solid var(--line);
+            font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            white-space: pre-wrap; overflow-wrap: anywhere;
+        }
+        .cmd button { flex: none; font-size: 0.8125rem; padding: 6px 10px; }
+
+        .summary {
+            border-left: 3px solid var(--line); padding: 4px 0 4px 16px; margin: 0 0 28px; max-width: 68ch;
+        }
+        .summary p { font-family: var(--serif); margin: 0 0 8px; }
+        .summary ul { margin: 0; padding-left: 20px; font-family: var(--serif); }
+        .summary li { margin-bottom: 4px; }
+
+        /* ---------- asking ---------- */
+        .panel { background: var(--page); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
+        .ask textarea {
+            width: 100%; min-height: 76px; padding: 10px 12px; resize: vertical;
+            border: 1px solid var(--line); border-radius: var(--radius); background: var(--page);
+        }
+        .ask .row { margin-top: 10px; justify-content: space-between; }
+        .counter { color: var(--muted); font-size: 0.8125rem; }
+
+        .answers { display: grid; gap: 12px; list-style: none; margin: 0; padding: 0; }
+        .answer {
+            background: var(--page); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px;
+            cursor: pointer;
+        }
+        .answer[aria-current="true"] { border-color: var(--cobalt); }
+        .answer .q { color: var(--muted); margin: 0 0 8px; }
+        .answer .a { font-family: var(--serif); font-size: 1.0625rem; line-height: 1.6; margin: 0; white-space: pre-wrap; }
+        .answer .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+        .chip {
+            border: 1px solid var(--cobalt); color: var(--cobalt); background: transparent;
+            border-radius: 999px; padding: 2px 10px; font-size: 0.8125rem; cursor: pointer;
+        }
+        .chip:hover { background: var(--cobalt-tint); }
+        .tokens { color: var(--muted); font-size: 0.8125rem; margin-left: auto; }
+        .note {
+            border-radius: var(--radius); padding: 10px 12px; margin-top: 12px; font-size: 0.9375rem;
+        }
+        .note-amber { background: var(--amber-tint); color: var(--amber); }
+        .note-red { background: var(--red-tint); color: var(--red); }
+        .note-red .detail { display: block; opacity: 0.85; font-size: 0.8125rem; margin-top: 4px; overflow-wrap: anywhere; }
+        .pending { color: var(--muted); font-style: italic; }
+        .empty { color: var(--muted); margin: 0; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+        }
+    </style>
+</head>
+<body>
+<header class="bar">
+    <h1 class="wordmark">DocQA</h1>
+    <p class="tagline">Ask a document questions. Every answer shows the passages it came from.</p>
+    <div class="bar-actions">
+        <label class="visually-hidden" for="recent">Open a recent document</label>
+        <select id="recent" hidden></select>
+        <button class="btn-quiet" id="new-doc" hidden>New document</button>
+    </div>
+</header>
+
+<main class="layout">
+    <!-- Left: the document (or the form to add one) -->
+    <section class="sheet" aria-live="polite">
+        <form id="compose">
+            <h2>Add a document</h2>
+            <p class="lede">Paste any text — a policy, a manual, meeting notes. It's split into passages and indexed, then you can ask about it. Use public or made-up text only.</p>
+            <div class="field">
+                <label for="title">Title</label>
+                <input id="title" name="title" required maxlength="300" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="content">Text</label>
+                <textarea id="content" name="content" required></textarea>
+                <p class="hint" id="content-hint">Up to 200,000 characters.</p>
+            </div>
+            <div class="row">
+                <button class="btn" type="submit" id="add-btn">Add document</button>
+                <button class="link" type="button" id="sample">Use a sample returns policy</button>
+            </div>
+            <div id="compose-error"></div>
+        </form>
+
+        <article id="reader" hidden>
+            <div class="doc-head">
+                <h2 id="doc-title"></h2>
+                <button class="btn-quiet" id="summarize" type="button" disabled>Summarize</button>
+            </div>
+            <div class="progress" id="progress" hidden>
+                <p id="progress-text"></p>
+                <div class="track"><div class="fill" id="progress-fill"></div></div>
+                <div id="stall"></div>
+            </div>
+            <div id="reader-error"></div>
+            <div id="summary"></div>
+            <p class="doc-text" id="doc-text"></p>
+        </article>
+    </section>
+
+    <!-- Right: questions and answers -->
+    <aside class="side">
+        <form class="panel ask" id="ask">
+            <label for="question">Ask about this document</label>
+            <textarea id="question" maxlength="1000" placeholder="How long do refunds take?" disabled></textarea>
+            <div class="row">
+                <span class="counter" id="ask-status">Add a document to start asking.</span>
+                <button class="btn" type="submit" id="ask-btn" disabled>Ask</button>
+            </div>
+        </form>
+        <ol class="answers" id="answers"></ol>
+    </aside>
+</main>
+
+<script>
+    (() => {
+        "use strict";
+
+        const SAMPLE = {
+            title: "Northwind Outfitters returns policy",
+            content: `Returns and refunds
+
+You can return most items within 30 days of delivery for a full refund to your original payment method. Items must be unworn, unwashed and have their original tags attached. Footwear must be returned in its original box.
+
+How to start a return
+Sign in to your account, open the order, and choose "Return items". Print the prepaid label and drop the parcel at any Northwind store or partner courier point. If you checked out as a guest, email returns@northwind.example with your order number and we will send you a label within one business day.
+
+When you'll get your money back
+Once your return reaches our warehouse, we inspect it within 2 business days. Refunds are then processed within 5-7 business days. Your bank may take a further 3-5 days to show the credit. You'll get an email at each step.
+
+Shipping costs
+Original shipping charges are not refunded unless the item arrived damaged or we sent the wrong item. Return shipping is free for orders over $75; for smaller orders, $6.95 is deducted from your refund.
+
+Items we can't take back
+Gift cards, personalised items, swimwear with the hygiene liner removed, and anything marked "Final sale" can't be returned. Digital products such as trail map downloads are non-refundable once downloaded.
+
+Exchanges
+We don't offer direct exchanges. Return the item for a refund and place a new order; if the size you want sells out in the meantime, we can't hold stock for you.
+
+Damaged or faulty items
+If something arrives damaged, contact us within 7 days with a photo. We'll send a replacement or a full refund, including the original shipping, and you won't need to return the damaged item.
+
+Warranty
+Tents, packs and sleeping bags carry a 2-year warranty against manufacturing defects. Normal wear, accidents and misuse are not covered. Warranty claims are handled by repair first; if a repair isn't possible we replace the item.`
+        };
+
+        const POLL_MS = 1500;
+        const STALL_MS = 30000; // no progress for this long → explain what might be wrong
+        const RECENT_KEY = "docqa:recent";
+
+        const $ = (id) => document.getElementById(id);
+        const els = {
+            compose: $("compose"), title: $("title"), content: $("content"), addBtn: $("add-btn"),
+            sample: $("sample"), composeError: $("compose-error"),
+            reader: $("reader"), docTitle: $("doc-title"), docText: $("doc-text"),
+            progress: $("progress"), progressText: $("progress-text"), progressFill: $("progress-fill"),
+            stall: $("stall"),
+            readerError: $("reader-error"), summary: $("summary"), summarize: $("summarize"),
+            ask: $("ask"), question: $("question"), askBtn: $("ask-btn"), askStatus: $("ask-status"),
+            answers: $("answers"), recent: $("recent"), newDoc: $("new-doc"),
+        };
+
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        let doc = null;          // { id, title, content, status, chunks, embedded_chunks }
+        let pollTimer = null;
+        let lastProgress = null; // { docId, count, at } — when the indexed count last changed
+        let answerSeq = 0;
+
+        // ---------- helpers ----------
+        function el(tag, props = {}, children = []) {
+            const node = document.createElement(tag);
+            for (const [k, v] of Object.entries(props)) {
+                if (k === "class") node.className = v;
+                else if (k === "text") node.textContent = v;
+                else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+                else node.setAttribute(k, v);
+            }
+            for (const child of [].concat(children)) if (child) node.append(child);
+            return node;
+        }
+
+        async function api(method, path, body) {
+            let res;
+            try {
+                res = await fetch(path, {
+                    method,
+                    headers: body ? { "Content-Type": "application/json", Accept: "application/json" } : { Accept: "application/json" },
+                    body: body ? JSON.stringify(body) : undefined,
+                });
+            } catch {
+                return { ok: false, status: 0, data: { error: "network", detail: "Couldn't reach the server. Check that it's running." } };
+            }
+            let data = {};
+            try { data = await res.json(); } catch { /* empty or non-JSON body */ }
+            return { ok: res.ok, status: res.status, data };
+        }
+
+        function noteEl(kind, message, detail) {
+            return el("div", { class: `note note-${kind}`, role: kind === "red" ? "alert" : "status" }, [
+                document.createTextNode(message),
+                detail ? el("span", { class: "detail", text: detail }) : null,
+            ]);
+        }
+
+        function setNote(container, kind, message, detail) {
+            container.replaceChildren(message ? noteEl(kind, message, detail) : "");
+        }
+
+        // ---------- recent documents (per browser) ----------
+        function readRecent() {
+            try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; }
+        }
+        function rememberDoc(id, title) {
+            const list = [{ id, title }, ...readRecent().filter((d) => d.id !== id)].slice(0, 8);
+            try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ }
+            renderRecent();
+        }
+        function forgetDoc(id) {
+            const list = readRecent().filter((d) => d.id !== id);
+            try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ }
+            renderRecent();
+        }
+        function renderRecent() {
+            const list = readRecent();
+            els.recent.hidden = list.length === 0;
+            els.recent.replaceChildren(
+                el("option", { value: "", text: "Recent documents" }),
+                ...list.map((d) => el("option", { value: d.id, text: d.title }))
+            );
+            if (doc) els.recent.value = String(doc.id);
+        }
+
+        // ---------- views ----------
+        function showCompose() {
+            clearTimeout(pollTimer);
+            doc = null;
+            history.replaceState(null, "", location.pathname);
+            els.compose.hidden = false;
+            els.reader.hidden = true;
+            els.newDoc.hidden = true;
+            els.answers.replaceChildren();
+            setAskEnabled(false, "Add a document to start asking.");
+            renderRecent();
+            els.title.focus();
+        }
+
+        function showReader() {
+            els.compose.hidden = true;
+            els.reader.hidden = false;
+            els.newDoc.hidden = false;
+            els.docTitle.textContent = doc.title;
+            els.summary.replaceChildren();
+            els.readerError.replaceChildren();
+            els.stall.replaceChildren();
+            els.answers.replaceChildren();
+            renderDocText([]);
+            renderStatus();
+            renderRecent();
+        }
+
+        function setAskEnabled(enabled, status) {
+            els.question.disabled = !enabled;
+            els.askBtn.disabled = !enabled;
+            els.askStatus.textContent = status;
+        }
+
+        function renderStatus() {
+            const ready = doc.status === "ready";
+            els.summarize.disabled = !ready;
+            els.progress.hidden = doc.status !== "processing";
+
+            if (doc.status === "processing") {
+                const total = doc.chunks || 0;
+                const done = doc.embedded_chunks || 0;
+                els.progressText.textContent = total
+                    ? `Indexing passages: ${done} of ${total}`
+                    : "Indexing passages…";
+                els.progressFill.style.width = total ? `${Math.round((done / total) * 100)}%` : "0%";
+                setAskEnabled(false, "You can ask once indexing finishes.");
+
+                const now = Date.now();
+                if (!lastProgress || lastProgress.docId !== doc.id || lastProgress.count !== done) {
+                    lastProgress = { docId: doc.id, count: done, at: now };
+                }
+                renderStall(now - lastProgress.at >= STALL_MS);
+            } else if (doc.status === "failed") {
+                renderStall(false);
+                setNote(els.readerError, "red",
+                    "Indexing failed after several retries, so this document can't be searched.",
+                    "Check the server log for [EmbedChunksJob] lines, then add the document again.");
+                setAskEnabled(false, "This document couldn't be indexed.");
+            } else {
+                renderStall(false);
+                setAskEnabled(true, `${doc.chunks} passages indexed.`);
+            }
+        }
+
+        // Explains a stalled indexing job, with the two commands that tell the
+        // causes apart. Built once per stall so the Copy buttons keep their state.
+        function renderStall(stalled) {
+            if (!stalled) {
+                els.stall.replaceChildren();
+                return;
+            }
+            if (els.stall.dataset.docId === String(doc.id) && els.stall.childNodes.length) return;
+            els.stall.dataset.docId = String(doc.id);
+
+            // Calls the job's code directly: perform_now would let retry_on swallow
+            // the error and quietly reschedule, which hides exactly what we want to see.
+            const runJob = `bin/rails runner 'd = Document.find(${doc.id}); EmbedChunksJob.new.perform(d.id); ` +
+                `puts "OK: #{d.reload.status}, #{d.chunks.where.not(embedding: nil).count} of #{d.chunks.count} embedded"'`;
+            const checkWorker = `bin/rails runner 'p SolidQueue::Process.pluck(:kind, :last_heartbeat_at)'`;
+
+            els.stall.replaceChildren(el("div", { class: "note note-amber stall", role: "status" }, [
+                el("p", { text: "No progress for 30 seconds. Either the indexing job is failing and " +
+                        "retrying (it gives up after about 5 minutes), or no background worker " +
+                        "is running." }),
+                el("p", { text: "To see the error, run the indexing directly in your terminal:" }),
+                commandRow(runJob),
+                el("p", { text: "If it prints OK, indexing works and the worker isn't running. This lists " +
+                        "running workers; if it's empty, start one with bin/jobs:" }),
+                commandRow(checkWorker),
+            ]));
+        }
+
+        function commandRow(command) {
+            const button = el("button", { class: "btn-quiet", type: "button", text: "Copy" });
+            button.addEventListener("click", async () => {
+                try {
+                    await navigator.clipboard.writeText(command);
+                    button.textContent = "Copied";
+                } catch {
+                    button.textContent = "Select and copy";
+                }
+                setTimeout(() => { button.textContent = "Copy"; }, 2000);
+            });
+            return el("div", { class: "cmd" }, [el("code", { text: command }), button]);
+        }
+
+        // Render the document with the given sources highlighted in place.
+        // sources: [{ n, text }]. Passages overlap by design, so ranges are merged by
+        // boundaries and each stretch of text knows which passage numbers cover it.
+        function renderDocText(sources) {
+            const text = doc.content || "";
+            const ranges = [];
+            for (const s of sources) {
+                const start = s.text ? text.indexOf(s.text) : -1;
+                if (start >= 0) ranges.push({ n: s.n, start, end: start + s.text.length });
+            }
+
+            if (ranges.length === 0) {
+                els.docText.textContent = text;
+                return;
+            }
+
+            const cuts = new Set([0, text.length]);
+            ranges.forEach((r) => { cuts.add(r.start); cuts.add(r.end); });
+            const points = [...cuts].sort((a, b) => a - b);
+            const frag = document.createDocumentFragment();
+
+            for (let i = 0; i < points.length - 1; i++) {
+                const from = points[i], to = points[i + 1];
+                const slice = text.slice(from, to);
+                const covering = ranges.filter((r) => r.start <= from && r.end >= to);
+                if (covering.length === 0) { frag.append(slice); continue; }
+
+                const mark = el("mark", { "data-passages": covering.map((r) => r.n).join(" ") });
+                ranges.filter((r) => r.start === from).forEach((r) => {
+                    mark.append(el("span", { class: "badge", text: String(r.n), "aria-label": `Passage ${r.n}` }));
+                });
+                mark.append(slice);
+                frag.append(mark);
+            }
+            els.docText.replaceChildren(frag);
+        }
+
+        function focusPassage(n) {
+            const marks = [...els.docText.querySelectorAll("mark")]
+                .filter((m) => m.dataset.passages.split(" ").includes(String(n)));
+            if (marks.length === 0) return;
+            marks[0].scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+            marks.forEach((m) => m.classList.add("flash"));
+            setTimeout(() => marks.forEach((m) => m.classList.remove("flash")), 1200);
+        }
+
+        function activateAnswer(item) {
+            els.answers.querySelectorAll(".answer").forEach((a) => a.setAttribute("aria-current", "false"));
+            item.node.setAttribute("aria-current", "true");
+            renderDocText(item.sources);
+        }
+
+        // ---------- loading a document ----------
+        async function openDocument(id) {
+            clearTimeout(pollTimer);
+            const { ok, status, data } = await api("GET", `/api/documents/${id}`);
+            if (!ok) {
+                if (status === 404) forgetDoc(Number(id));
+                showCompose();
+                setNote(els.composeError, "red",
+                    status === 404 ? "That document no longer exists." : "Couldn't open that document.",
+                    data.detail);
+                return;
+            }
+            doc = data;
+            history.replaceState(null, "", `?doc=${doc.id}`);
+            rememberDoc(doc.id, doc.title);
+            showReader();
+            if (doc.status === "processing") schedulePoll();
+        }
+
+        function schedulePoll() {
+            clearTimeout(pollTimer);
+            const id = doc.id;
+            pollTimer = setTimeout(async () => {
+                if (!doc || doc.id !== id) return;
+                const { ok, data } = await api("GET", `/api/documents/${id}`);
+                if (!doc || doc.id !== id) return;
+                if (ok) {
+                    Object.assign(doc, data);
+                    renderStatus();
+                    if (doc.status === "ready") { els.question.focus(); return; }
+                    if (doc.status === "failed") return;
+                }
+                schedulePoll(); // keep trying through transient errors
+            }, POLL_MS);
+        }
+
+        // ---------- events ----------
+        els.sample.addEventListener("click", () => {
+            els.title.value = SAMPLE.title;
+            els.content.value = SAMPLE.content;
+            els.content.dispatchEvent(new Event("input"));
+            els.addBtn.focus();
+        });
+
+        els.content.addEventListener("input", () => {
+            const n = els.content.value.length;
+            els.composeError.replaceChildren();
+            $("content-hint").textContent = n
+                ? `${n.toLocaleString()} of 200,000 characters.`
+                : "Up to 200,000 characters.";
+        });
+
+        els.compose.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const title = els.title.value.trim();
+            const content = els.content.value;
+            if (!title || !content.trim()) {
+                setNote(els.composeError, "red", "Add a title and some text first.");
+                return;
+            }
+            els.addBtn.disabled = true;
+            els.addBtn.textContent = "Adding…";
+            const { ok, status, data } = await api("POST", "/api/documents", { title, content });
+            els.addBtn.disabled = false;
+            els.addBtn.textContent = "Add document";
+
+            if (!ok) {
+                const msg = status === 422 ? "The document couldn't be added." : "Couldn't add the document.";
+                setNote(els.composeError, "red", msg, data.detail);
+                return;
+            }
+            doc = { id: data.id, title, content, status: data.status, chunks: data.chunks, embedded_chunks: 0 };
+            els.compose.reset();
+            $("content-hint").textContent = "Up to 200,000 characters.";
+            history.replaceState(null, "", `?doc=${doc.id}`);
+            rememberDoc(doc.id, doc.title);
+            showReader();
+            schedulePoll();
+        });
+
+        els.newDoc.addEventListener("click", showCompose);
+
+        els.recent.addEventListener("change", () => {
+            if (els.recent.value) openDocument(els.recent.value);
+        });
+
+        els.question.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); els.ask.requestSubmit(); }
+        });
+
+        els.ask.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const question = els.question.value.trim();
+            if (!question || !doc || doc.status !== "ready") return;
+
+            const askedFor = doc.id;
+            const item = { id: ++answerSeq, sources: [] };
+            const answerText = el("p", { class: "a pending", text: "Searching the document…" });
+            item.node = el("li", { class: "answer", "aria-current": "false", tabindex: "0" }, [
+                el("p", { class: "q", text: question }),
+                answerText,
+            ]);
+            item.node.addEventListener("click", (ev) => { if (!ev.target.closest(".chip")) activateAnswer(item); });
+            item.node.addEventListener("keydown", (ev) => {
+                if ((ev.key === "Enter" || ev.key === " ") && ev.target === item.node) { ev.preventDefault(); activateAnswer(item); }
+            });
+            els.answers.prepend(item.node);
+            els.question.value = "";
+            els.askBtn.disabled = true;
+
+            const { ok, status, data } = await api("POST", "/api/queries", { document_id: askedFor, question });
+            if (!doc || doc.id !== askedFor) return; // user switched documents meanwhile
+            els.askBtn.disabled = false;
+            answerText.classList.remove("pending");
+
+            if (!ok) {
+                answerText.textContent = "";
+                const messages = {
+                    409: "This document is still being indexed. Ask again when it's done.",
+                    422: "Questions need to be between 1 and 1,000 characters.",
+                    502: "The model didn't respond after several retries. Try again in a minute.",
+                    404: "This document no longer exists.",
+                };
+                item.node.append(noteEl("red", messages[status] || "Something went wrong asking that question.", data.detail));
+                return;
+            }
+
+            answerText.textContent = data.answer;
+            item.sources = (data.sources || []).map((s, i) => ({ n: i + 1, text: s.text || s.excerpt }));
+
+            const meta = el("div", { class: "meta" });
+            item.sources.forEach((s) => {
+                meta.append(el("button", {
+                    class: "chip", type: "button", text: `Passage ${s.n}`,
+                    onclick: () => { activateAnswer(item); focusPassage(s.n); },
+                }));
+            });
+            if (data.tokens_used) meta.append(el("span", { class: "tokens", text: `${data.tokens_used.toLocaleString()} tokens` }));
+            if (meta.childNodes.length) item.node.append(meta);
+
+            if (item.sources.length === 0) {
+                item.node.append(noteEl("amber",
+                    "No passage was close enough to this question, so the model wasn't asked."));
+            }
+            activateAnswer(item);
+        });
+
+        els.summarize.addEventListener("click", async () => {
+            if (!doc) return;
+            const forDoc = doc.id;
+            els.summarize.disabled = true;
+            els.summarize.textContent = "Summarizing…";
+            const { ok, data } = await api("POST", `/api/documents/${forDoc}/summary`);
+            if (!doc || doc.id !== forDoc) return;
+            els.summarize.disabled = false;
+            els.summarize.textContent = "Summarize";
+
+            if (!ok) {
+                els.summary.replaceChildren(noteEl("red", "The summary couldn't be created. Try again in a minute.", data.detail));
+                return;
+            }
+            // Accept the current shape { summary: { overview, key_points }, ... } and
+            // the nestings produced when the controller and summarizer come from
+            // different versions.
+            let s = data.summary;
+            if (s && typeof s.summary === "object" && s.summary !== null) s = s.summary;
+            if (!s && (data.overview || data.key_points)) s = data;
+            s = s || {};
+            const overview = typeof s.overview === "string" ? s.overview.trim() : "";
+            const points = (Array.isArray(s.key_points) ? s.key_points : [])
+                .map((p) => (typeof p === "string" ? p : JSON.stringify(p)).trim())
+                .filter(Boolean);
+
+            if (!overview && points.length === 0) {
+                els.summary.replaceChildren(noteEl("red",
+                    "The summary came back empty. Try again in a moment.",
+                    "If it keeps happening, check the server log for [Llm::Summarizer] lines."));
+                return;
+            }
+
+            const block = el("section", { class: "summary", "aria-label": "Summary" }, [
+                el("h3", { text: "Summary" }),
+                overview ? el("p", { text: overview }) : null,
+                points.length ? el("ul", {}, points.map((p) => el("li", { text: p }))) : null,
+                data.truncated ? el("p", { class: "hint", text: "Summarized from the opening part of the document only, because it's long." }) : null,
+            ]);
+            els.summary.replaceChildren(block);
+        });
+
+        // ---------- start ----------
+        renderRecent();
+        const startId = new URLSearchParams(location.search).get("doc");
+        if (startId) openDocument(startId); else els.title.focus();
+    })();
+</script>
+</body>
+</html>
