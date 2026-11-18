@@ -1,0 +1,140 @@
+# Evaluation set for DocQA retrieval and refusals.
+#
+# Each case is a question about the document below, with what should happen:
+#   expect: answer  — the document answers it. `passage` is a phrase that must
+#                     appear in the top-ranked passage; `answer_includes_any`
+#                     (checked only with ANSWERS=1) are words the answer
+#                     should contain, any one of them is enough.
+#   expect: refuse  — the document doesn't answer it. `kind` is off_topic
+#                     (nothing to do with the document) or in_domain (same
+#                     subject, but the document doesn't cover it; these are
+#                     the cases a cutoff most often gets wrong).
+#
+# Run with: bin/rails eval:run
+
+document:
+  title: Northwind Outfitters returns policy
+  content: |-
+    Returns and refunds
+
+    You can return most items within 30 days of delivery for a full refund to your original payment method. Items must be unworn, unwashed and have their original tags attached. Footwear must be returned in its original box.
+
+    How to start a return
+    Sign in to your account, open the order, and choose "Return items". Print the prepaid label and drop the parcel at any Northwind store or partner courier point. If you checked out as a guest, email returns@northwind.example with your order number and we will send you a label within one business day.
+
+    When you'll get your money back
+    Once your return reaches our warehouse, we inspect it within 2 business days. Refunds are then processed within 5-7 business days. Your bank may take a further 3-5 days to show the credit. You'll get an email at each step.
+
+    Shipping costs
+    Original shipping charges are not refunded unless the item arrived damaged or we sent the wrong item. Return shipping is free for orders over $75; for smaller orders, $6.95 is deducted from your refund.
+
+    Items we can't take back
+    Gift cards, personalised items, swimwear with the hygiene liner removed, and anything marked "Final sale" can't be returned. Digital products such as trail map downloads are non-refundable once downloaded.
+
+    Exchanges
+    We don't offer direct exchanges. Return the item for a refund and place a new order; if the size you want sells out in the meantime, we can't hold stock for you.
+
+    Damaged or faulty items
+    If something arrives damaged, contact us within 7 days with a photo. We'll send a replacement or a full refund, including the original shipping, and you won't need to return the damaged item.
+
+    Warranty
+    Tents, packs and sleeping bags carry a 2-year warranty against manufacturing defects. Normal wear, accidents and misuse are not covered. Warranty claims are handled by repair first; if a repair isn't possible we replace the item.
+
+cases:
+  # --- The document answers these ---------------------------------------
+  - question: How long do I have to return an item?
+    expect: answer
+    passage: within 30 days of delivery
+    answer_includes_any: ["30 days"]
+
+  - question: Do shoes need to come back in their box?
+    expect: answer
+    passage: Footwear must be returned in its original box
+    answer_includes_any: ["box"]
+
+  - question: I checked out as a guest. How do I start a return?
+    expect: answer
+    passage: returns@northwind.example
+    answer_includes_any: ["returns@northwind.example", "email"]
+
+  - question: How long until I get my money back?
+    expect: answer
+    passage: processed within 5-7 business days
+    answer_includes_any: ["5-7", "5 to 7", "five"]
+
+  - question: Is return shipping free?
+    expect: answer
+    passage: Return shipping is free for orders over $75
+    answer_includes_any: ["$75", "75"]
+
+  - question: Will I get my original shipping cost back?
+    expect: answer
+    passage: Original shipping charges are not refunded
+    answer_includes_any: ["not", "damaged", "wrong item"]
+
+  - question: Can I return a gift card?
+    expect: answer
+    passage: Gift cards, personalised items
+    answer_includes_any: ["can't", "cannot", "not", "no"]
+
+  - question: Can I swap my jacket for a different size?
+    expect: answer
+    passage: We don't offer direct exchanges
+    answer_includes_any: ["exchange"]
+
+  - question: My tent arrived broken. What should I do?
+    expect: answer
+    passage: contact us within 7 days with a photo
+    answer_includes_any: ["7 days", "seven days", "photo"]
+
+  - question: How long is the warranty on sleeping bags?
+    expect: answer
+    passage: 2-year warranty
+    answer_includes_any: ["2-year", "2 year", "two-year", "two year", "2 years", "two years"]
+
+  - question: Are trail map downloads refundable?
+    expect: answer
+    passage: trail map downloads are non-refundable
+    answer_includes_any: ["non-refundable", "not refundable", "no"]
+
+  - question: Does the warranty cover accidental damage?
+    expect: answer
+    passage: accidents and misuse are not covered
+    answer_includes_any: ["not", "no"]
+
+  # --- The document doesn't answer these ----------------------------------
+  - question: What is the capital of France?
+    expect: refuse
+    kind: off_topic
+
+  - question: What's the weather like in Nairobi today?
+    expect: refuse
+    kind: off_topic
+
+  - question: Who is the CEO of Northwind?
+    expect: refuse
+    kind: off_topic
+
+  - question: Do you ship to Canada?
+    expect: refuse
+    kind: in_domain
+
+  - question: Do you offer price matching?
+    expect: refuse
+    kind: in_domain
+
+  - question: Can I pay with PayPal?
+    expect: refuse
+    kind: in_domain
+
+  - question: How do I reset my account password?
+    expect: refuse
+    kind: in_domain
+
+  - question: Is there a student discount?
+    expect: refuse
+    kind: in_domain
+
+  - question: What are your store opening hours?
+    expect: refuse
+    kind: in_domain
