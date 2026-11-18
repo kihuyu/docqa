@@ -13,6 +13,9 @@ are retrieved and handed to the model with instructions to answer from them
 alone. If no passage is close enough, the model isn't called at all and the
 answer says the document doesn't cover it.
 
+On a labelled set of 21 questions, it answers or refuses correctly on
+**21 of 21** (see [Evaluation](#evaluation)).
+
 ## What it does
 
 - **Ask** a question about a document. The answer comes back with its source
@@ -21,6 +24,8 @@ answer says the document doesn't cover it.
 - **Summarize** a document into an overview and key points.
 - **Index in the background**: adding a document returns immediately, and the
   page shows indexing progress.
+- **Measure itself**: an evaluation task scores retrieval and refusals on
+  labelled questions and picks the relevance cutoff from the results.
 
 ## Architecture
 
@@ -91,6 +96,9 @@ bin/smoke_test.sh               # health → add → wait for indexing → ask �
 ```
 
 Get a free Gemini API key (no card needed) at https://aistudio.google.com/apikey.
+Google now offers `gemini-2.5-flash` only to accounts that have used it
+before. If yours is refused, set `gemini.chat_model` to a current model from
+[Google's model list](https://ai.google.dev/gemini-api/docs/models).
 
 ## Configuration
 
@@ -106,7 +114,7 @@ gemini:
   thinking_budget: 0                    # false = don't send the setting
 
 retrieval:
-  max_distance: 0.6                     # how close a passage must be; false = no cutoff
+  max_distance: 0.357                   # chosen by bin/rails eval:run (code default 0.6); false = no cutoff
 
 limits:
   max_question_chars: 1000
@@ -216,9 +224,57 @@ bin/rails llm:verify_retry      # a fake provider fails, retries with backoff, g
 bin/rails llm:ping              # one real chat and embedding call, with the log lines
 ```
 
-**Tuning the relevance cutoff:** 0.6 is a starting point. Ask a few questions
-the document answers and a few it doesn't, read the `[Llm::Retriever]`
-distances in the log, and set `retrieval.max_distance` between the two groups.
+## Evaluation
+
+`eval/returns_policy.yml` holds 21 questions about the sample returns policy:
+12 it answers, each with the phrase its answer comes from, and 9 it doesn't.
+Of those 9, three are off-topic and six are on the same subject but not
+covered ("Do you ship to Canada?", "Do you offer price matching?"), which is
+where a relevance cutoff is most likely to go wrong.
+
+```bash
+bin/rails eval:run              # retrieval and refusals: about 25 embedding calls
+ANSWERS=1 bin/rails eval:run    # also asks the model each question (about 2 minutes on the free tier)
+```
+
+It reports how often the passage containing the answer ranks first, which
+questions the app would answer when it should refuse (or the reverse), the
+share correct at every cutoff from 0.30 to 0.90, and a recommended cutoff.
+Distances are recorded once, so trying every cutoff costs no extra API calls.
+When two cutoffs tie, it picks the one that refuses rather than answers
+without support.
+
+### Results
+
+| Measure | Result |
+|---|---|
+| Right passage ranked first | 11 of 12 |
+| Correct at the chosen cutoff (0.357) | 21 of 21 |
+| Answered when it should have refused | 0 of 9 |
+| Refused when it should have answered | 0 of 12 |
+
+What the evaluation found:
+
+- **The original cutoff (0.60) refused nothing:** 0 of the 9 unanswerable
+  questions. These embeddings place every question fairly close to every
+  passage; even "What is the capital of France?" scored 0.48. Until the
+  evaluation, every correct refusal came from the prompt, not the cutoff.
+- **A clean cutoff exists, but the margin is small.** The farthest answerable
+  question scored 0.349 and the closest unanswerable one 0.366. The cutoff is
+  set to the midpoint, 0.357, leaving equal room on each side. With a gap this
+  narrow, some real questions will be refused when the document does answer
+  them; the safer way to be wrong.
+- **The one ranking miss is passage overlap:** for "How long until I get my
+  money back?" the top passage also contains the answer, but not the exact
+  phrase the case expects.
+
+The sample is only three passages long, so ranking the right one first is
+easy; these numbers show the refusal logic works rather than that retrieval
+scales. A longer evaluation document is on the list below.
+
+Each run is saved to `tmp/eval/` for comparing changes to chunking, models or
+prompts. `MIN_ACCURACY=0.9` makes the task fail below that score, and
+`FILE=path` evaluates another document written in the same format.
 
 ## Design decisions
 
@@ -250,8 +306,8 @@ bundle exec rspec
 
 The suite covers the client's retries, jitter, response parsing and error
 mapping; retrieval against real pgvector queries; chunking; the summarizer's
-parsing fallbacks; the embedding and purge jobs; rate limits; and every
-endpoint's status codes. The workflow in `.github/workflows/ci.yml` runs it on
+parsing fallbacks; the embedding and purge jobs; rate limits; the evaluation
+scoring; and every endpoint's status codes. The workflow in `.github/workflows/ci.yml` runs it on
 every push against Postgres with pgvector.
 
 ## Deploying (Render + Neon, $0)
@@ -312,6 +368,7 @@ restarts.
 
 ## What I'd add next
 
+- A longer evaluation document, where retrieval has real competition
 - Questions across several documents at once
 - Unguessable document links instead of sequential numbers
 - Sentence-aware chunking
