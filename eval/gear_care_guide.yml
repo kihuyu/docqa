@@ -1,0 +1,284 @@
+# Evaluation set for a long document.
+#
+# A gear care guide of 20 passages, many on similar subjects (washing a
+# sleeping bag vs a jacket, drying boots vs a tent), so retrieval has real
+# competition. It checks two things the short returns policy can't:
+#   - whether the right passage still ranks first among many similar ones
+#   - whether a cutoff tuned on a short document still separates questions the
+#     guide answers from ones on the same subject that it doesn't
+#
+# Same format as returns_policy.yml. Run with:
+#   bin/rails eval:run FILE=eval/gear_care_guide.yml
+
+document:
+  title: Northwind Outfitters gear care guide
+  content: |-
+    Gear care guide
+
+    Looking after your gear
+
+    Most outdoor gear wears out because of how it is stored and cleaned, not because of how it is used. Dirt, sweat and body oils break down fabrics and coatings over time, damp encourages mildew, and heat weakens glues and foams. The advice in this guide applies to the gear we sell, but it works for most brands. Always check the care label first; if the label and this guide disagree, follow the label.
+
+    Tents: before your first trip
+
+    Pitch a new tent at home before you take it anywhere. It is much easier to learn which pole goes where in daylight on a lawn than at dusk in the wind, and you can check that nothing is missing. All of our tents have factory-taped seams, so you don't need to seal them before use. Count the pegs and keep two spares in the bag; they are the part people lose most often.
+
+    Tents: drying and cleaning
+
+    Never pack a tent away wet for more than a day. If you have to pack up in the rain, pitch the tent again or hang it up indoors as soon as you get home, and leave it until both the fly and the inner are completely dry. Mildew can start growing on damp fabric within 48 hours, and once it has taken hold the stains and smell don't come out. To clean a tent, sponge it with lukewarm water and a little non-detergent soap. Never put a tent in a washing machine, and don't use household detergents, which strip the waterproof coating.
+
+    Tents: zips, poles and storage
+
+    Zips fail more often than any other part of a tent. Keep them clean by brushing out sand and grit with an old toothbrush, and if a zip is sticking, rub a little silicone zip lubricant along the teeth rather than forcing it. Close zips before you pitch the tent so they aren't under strain. If a pole section breaks on the trail, slide the aluminium repair sleeve from the pole bag over the break and tape it at both ends. At home, store the tent loosely in a large breathable bag rather than tightly rolled in its stuff sack, so the coating doesn't crack along the folds.
+
+    Sleeping bags: washing
+
+    Wash a sleeping bag only when it is visibly dirty or has lost its loft, usually once or twice a season. Use a large front-loading machine; the agitator in a top-loading machine can tear the internal baffles. Choose a gentle cycle at 30°C. For a down bag use a down-specific wash, and for a synthetic bag a mild, non-biological liquid. Run an extra rinse cycle so no soap is left in the fill.
+
+    Sleeping bags: drying
+
+    Tumble dry a down sleeping bag on the lowest heat with two or three clean tennis balls, which break up clumps of down as it dries. It takes three to four hours. Take it out every half hour and pull apart any clumps by hand. Make sure it is completely dry before you put it away: down that is even slightly damp will clump and can start to smell. Synthetic bags dry faster and can also be line dried in the shade. Never dry any sleeping bag on a radiator.
+
+    Sleeping bags: storage and liners
+
+    Store your sleeping bag loose in the large cotton storage sack it came with, or on a hanger in a wardrobe. Never store it in its compression sack. Kept compressed for months, the fill loses its loft and the bag won't be as warm. A sleeping bag liner keeps sweat and body oils off the bag, so you'll need to wash the bag far less often, and a liner is much easier to wash.
+
+    Sleeping bags: temperature ratings
+
+    Our sleeping bags show two temperatures from the standard test. The comfort rating is the lowest temperature at which a typical cold sleeper should sleep comfortably. The limit rating is the lowest temperature at which a typical warm sleeper can sleep for eight hours curled up. Choose a bag by its comfort rating, not its limit rating, and remember that a good sleeping pad matters as much as the bag.
+
+    Sleeping pads: inflating and leaks
+
+    Inflate an air pad with the pump sack that comes with it, not by mouth. The moisture in your breath collects inside the pad, where it can grow mould and, in freezing weather, turn to ice that reduces the pad's warmth. To find a slow leak, inflate the pad fully and brush soapy water over it a section at a time: the leak shows up as a stream of small bubbles. Dry the area, then apply a patch from the repair kit and leave it under a weight overnight.
+
+    Sleeping pads: storage
+
+    Store self-inflating and air pads unrolled with the valve open, under a bed or behind a sofa. A self-inflating pad stored rolled up for months loses its ability to expand, because the foam inside gets used to being compressed. Before a trip, open the valve and let the pad inflate on its own for a few hours to check it still holds air.
+
+    Waterproof jackets: washing
+
+    Wash a waterproof jacket regularly. Dirt and sweat clog the membrane, which stops it breathing and makes the jacket feel damp inside even when it isn't leaking. Close all the zips and Velcro, then wash it at 30°C with a technical cleaner. Don't use fabric softener or ordinary detergent; both leave a residue that attracts water. Never dry clean a waterproof jacket.
+
+    Waterproof jackets: restoring water repellency
+
+    When water stops beading on the outside of your jacket and soaks into the face fabric instead, the water-repellent finish needs reviving. First wash the jacket, then tumble dry it on a warm setting for 20 minutes. The heat reactivates the finish and is often all it takes. If water still soaks in afterwards, apply a spray-on reproofer to the clean, damp jacket and tumble dry it again to cure the treatment.
+
+    Insulated jackets
+
+    Wash insulated jackets as rarely as you can, following the same steps as a sleeping bag of the same fill: down wash and tennis balls for down, a mild liquid for synthetic. Between washes, spot clean the cuffs and collar with a damp cloth. Store insulated jackets on a hanger rather than in their stuff sack, so the fill keeps its loft.
+
+    Boots: breaking them in
+
+    Even boots that feel comfortable in the shop need breaking in. Wear new boots around the house and on short walks for at least a week before a long hike, with the socks you plan to hike in. Lace them firmly over the instep so your heel doesn't lift, which is what causes most blisters. If a pressure point doesn't ease after a week, bring the boots back to a store and we can stretch them.
+
+    Boots: cleaning and drying
+
+    Knock off dried mud and scrub the boots with a stiff brush and lukewarm water after every muddy walk; mud dries the leather out as it draws moisture from it. Take out the insoles and laces and stuff the boots with newspaper to dry them, changing the paper every few hours. Dry boots at room temperature, away from direct heat. Never dry boots on a radiator or by a fire: heat softens the glue between the sole and the upper and can crack the leather.
+
+    Boots: conditioning and resoling
+
+    Treat leather boots with a conditioning wax every three to six months, or whenever the leather looks dry or pale. Work the wax in with your fingers, paying attention to the seams, and leave the boots to absorb it overnight. Fabric boots don't need wax; use a spray-on waterproofer instead. When the tread wears smooth, most of our leather boots can be resoled: our partner cobbler resoles them for $85, and the boots come back in about three weeks.
+
+    Waterproof trousers and gaiters
+
+    Waterproof trousers take more abrasion than jackets, especially at the knees, seat and inside the ankles where crampons and boot buckles catch. Wash them the same way as a jacket and revive the water repellency in the same way. Gaiters collect mud on the inside as well as the outside, so rinse both sides under a tap after a wet walk and let them dry with the instep straps undone. Replace a worn instep strap before it snaps; spare straps fit every gaiter we sell.
+
+    Gloves and hats
+
+    Turn wet gloves inside out as far as they will go and dry them at room temperature, with the cuff open so air reaches the fingers. Waterproof gloves have a membrane insert that can tear if you pull the lining out roughly, so ease it back in finger by finger. Leather palms stiffen as they dry; work a little conditioning wax into them afterwards. Fleece and wool hats can be machine washed on a cool cycle.
+
+    Ropes and slings
+
+    Store climbing ropes loosely coiled in a rope bag, out of sunlight and well away from car batteries, solvents and other chemicals, which can weaken nylon without any visible sign. Wash a dirty rope in cool water with a rope cleaner and dry it uncoiled in the shade. Retire a rope after a long, hard fall, if the sheath is cut so the core shows, or after 10 years even if it has never been used. Slings and quickdraw dogbones should be retired on the same schedule.
+
+    Dry bags and pack liners
+
+    Dry bags keep their seal only if the roll-top is folded at least three times before you clip the buckle. Rinse them with fresh water after use in the sea, since salt crystals wear the coating where the bag folds. Check for pinholes by holding the bag up to a light from the inside. Store dry bags unrolled and open so any trapped moisture can escape.
+
+    Socks and base layers
+
+    Wash merino socks and base layers inside out on a cool wool cycle, and lay them flat to dry. Merino resists odour, so you can usually wear a base layer for several days before it needs washing. Heat shrinks merino, so never tumble dry it or leave it on a radiator. Synthetic base layers can be washed warmer, but they hold on to odour, so wash them after every use.
+
+    Backpacks: fit
+
+    A backpack has to fit your torso length, not your height. To measure it, ask someone to measure along your spine from the bony bump at the base of your neck, the C7 vertebra, down to the level of the top of your hip bones. Choose the pack size that matches that length. Fasten the hip belt over the top of your hip bones: it should carry about 80% of the weight, with the shoulder straps keeping the pack close to your back.
+
+    Backpacks: packing, cleaning and storage
+
+    Pack heavy items such as food and water in the middle of the pack, close to your back, and light, bulky items such as your sleeping bag at the bottom. To clean a pack, empty every pocket, shake out the crumbs, and wash it by hand in a bath of lukewarm water with a mild soap, using a soft brush on the dirty areas. Never machine wash a backpack: it damages the frame and the coating. Hang it upside down to dry with all the pockets open, out of direct sun.
+
+    Stoves: gas canister stoves
+
+    Never use a stove inside a tent or a closed porch. Stoves produce carbon monoxide, which you can't see or smell and which can kill in a small space. Cook outside, in the open, with the stove on a flat, stable surface. Before each trip, check the rubber O-ring where the stove screws onto the canister; if it is cracked or missing, don't use the stove until you have replaced it. Store gas canisters somewhere cool and never above 120°F (49°C), which means never in a car on a sunny day.
+
+    Stoves: liquid fuel stoves
+
+    Liquid fuel stoves need a little more care than canister stoves. Put a drop of oil on the pump cup leather every few trips so the pump keeps building pressure. If the flame becomes weak or yellow, the jet is probably partly blocked: clean it with the pricker tool that came with the stove. Empty the fuel bottle before you store the stove for the winter, since old fuel leaves deposits that block the fuel line.
+
+    Water filters
+
+    Backflush a hollow-fibre water filter after every trip, using the syringe supplied, until the water runs clear. Then let it dry completely before you store it. Never let a used filter freeze: water trapped in the fibres expands and cracks them, and you can't see the damage. On cold nights, keep the filter in a pocket or in your sleeping bag. If you think a filter has frozen, replace it, because a frozen filter may no longer remove bacteria. Our filters remove bacteria and protozoa but do not remove viruses, so where viruses are a risk, treat the water with purification tablets as well.
+
+    Headlamps and batteries
+
+    Take the batteries out of a headlamp before you store it for more than a month, since leaking batteries corrode the contacts. In cold weather, keep spare batteries in an inside pocket: alkaline batteries lose much of their power below freezing. Lithium batteries work far better in the cold, which makes them the better choice for winter trips. Rechargeable headlamps should be stored with a half charge and topped up every three months.
+
+    Trekking poles
+
+    After a wet or sandy walk, take your trekking poles apart and let the sections dry separately, otherwise grit and water get trapped inside and cause corrosion. If the flick locks start to slip, tighten the small screw on each lock a quarter turn with a screwdriver or a coin. Don't oil the sections; oil attracts dirt and makes the locks slip more.
+
+    Cookware
+
+    Our non-stick pans are easily scratched, so use wooden or plastic utensils only, never metal. Clean pots with hot water and a soft cloth, and avoid scouring pads. Titanium pots can't be scratched in the same way, but they heat unevenly, so stir often and keep the flame low to avoid burning food onto the base.
+
+    Repairs on the trail and at home
+
+    Carry a small repair kit on every trip: a roll of repair tape, a few safety pins, a needle and strong thread, and a spare buckle. Repair tape can patch a torn tent, jacket or pad for the rest of a trip. For lasting repairs, bring the item to our in-store repair desk, which fixes broken zips from $15 and patches tents and jackets while you wait for smaller jobs.
+
+    Putting gear away for the season
+
+    At the end of the season, clean and dry everything before you put it away, and store it somewhere cool, dry and dark. Hang or lay out anything with insulation rather than compressing it, unroll pads with the valves open, take the batteries out of torches and headlamps, and empty stove fuel bottles. A quick check now means you find a broken zip or a leaking pad in the autumn, not on the first night of next year's trip.
+
+cases:
+  # --- The guide answers these -------------------------------------------------
+  - question: How do I dry a down sleeping bag?
+    expect: answer
+    passage: two or three clean tennis balls
+    answer_includes_any: ["tennis", "low"]
+
+  - question: Can I keep my sleeping bag in its compression sack between trips?
+    expect: answer
+    passage: Never store it in its compression sack
+    answer_includes_any: ["no", "not", "never", "storage sack"]
+
+  - question: Why shouldn't I blow up my air pad by mouth?
+    expect: answer
+    passage: The moisture in your breath
+    answer_includes_any: ["moisture", "mould", "mold"]
+
+  - question: How do I find a slow leak in my sleeping pad?
+    expect: answer
+    passage: soapy water
+    answer_includes_any: ["soapy", "bubbles"]
+
+  - question: Water no longer beads on my rain jacket. How do I fix it?
+    expect: answer
+    passage: tumble dry it on a warm setting for 20 minutes
+    answer_includes_any: ["tumble", "20 minutes", "reproof"]
+
+  - question: Can I dry my wet boots on a radiator?
+    expect: answer
+    passage: Never dry boots on a radiator
+    answer_includes_any: ["no", "never", "not"]
+
+  - question: How much does it cost to resole my boots?
+    expect: answer
+    passage: resoles them for $85
+    answer_includes_any: ["$85", "85"]
+
+  - question: How do I measure my torso length for a backpack?
+    expect: answer
+    passage: the C7 vertebra
+    answer_includes_any: ["C7", "neck", "hip"]
+
+  - question: Is it safe to use my stove inside the tent?
+    expect: answer
+    passage: carbon monoxide
+    answer_includes_any: ["no", "never", "carbon monoxide"]
+
+  - question: What should I do if my water filter froze?
+    expect: answer
+    passage: If you think a filter has frozen, replace it
+    answer_includes_any: ["replace"]
+
+  - question: Does the water filter remove viruses?
+    expect: answer
+    passage: do not remove viruses
+    answer_includes_any: ["no", "not", "tablets"]
+
+  - question: A tent pole snapped on the trail. What can I do?
+    expect: answer
+    passage: aluminium repair sleeve
+    answer_includes_any: ["sleeve"]
+
+  - question: My tent zip keeps sticking. What should I do?
+    expect: answer
+    passage: silicone zip lubricant
+    answer_includes_any: ["silicone", "lubricant"]
+
+  - question: How often should I wax leather boots?
+    expect: answer
+    passage: every three to six months
+    answer_includes_any: ["three to six", "3 to 6", "3-6"]
+
+  - question: What's the hottest temperature I can store gas canisters at?
+    expect: answer
+    passage: never above 120°F (49°C)
+    answer_includes_any: ["120", "49"]
+
+  - question: How should I wash merino base layers?
+    expect: answer
+    passage: lay them flat to dry
+    answer_includes_any: ["cool", "wool", "flat"]
+
+  - question: Which batteries work best in the cold?
+    expect: answer
+    passage: Lithium batteries work far better in the cold
+    answer_includes_any: ["lithium"]
+
+  - question: How much does it cost to fix a broken zip?
+    expect: answer
+    passage: fixes broken zips from $15
+    answer_includes_any: ["$15", "15"]
+
+  - question: When should I retire a climbing rope?
+    expect: answer
+    passage: after 10 years even if it has never been used
+    answer_includes_any: ["10 years", "ten years", "fall"]
+
+  - question: How should I dry wet gloves?
+    expect: answer
+    passage: Turn wet gloves inside out
+    answer_includes_any: ["inside out", "room temperature"]
+
+  # --- Same subject, but the guide doesn't cover it ------------------------------
+  - question: How do I waterproof a canvas tent?
+    expect: refuse
+    kind: in_domain
+
+  - question: How do I clean a kayak after paddling in salt water?
+    expect: refuse
+    kind: in_domain
+
+  - question: How do I sharpen a pocket knife?
+    expect: refuse
+    kind: in_domain
+
+  - question: How should I wax my skis?
+    expect: refuse
+    kind: in_domain
+
+  - question: How do I choose the right size of climbing harness?
+    expect: refuse
+    kind: in_domain
+
+  - question: Can I put my GPS watch in the washing machine?
+    expect: refuse
+    kind: in_domain
+
+  - question: How do I store a bike over the winter?
+    expect: refuse
+    kind: in_domain
+
+  # --- Nothing to do with the guide ----------------------------------------------
+  - question: What is the capital of France?
+    expect: refuse
+    kind: off_topic
+
+  - question: Who wrote Pride and Prejudice?
+    expect: refuse
+    kind: off_topic
+
+  - question: What's the exchange rate between dollars and euros?
+    expect: refuse
+    kind: off_topic

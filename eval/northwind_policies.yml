@@ -1,0 +1,211 @@
+# Evaluation set for questions across several documents.
+#
+# Two documents that overlap: the returns policy from returns_policy.yml and a
+# shipping policy. Every question searches both, as if a visitor had ticked
+# both documents in "Search in".
+#
+#   expect: answer — `passages` names, for each document the answer needs, a
+#                    phrase that must appear in a retrieved passage from that
+#                    document. A question that needs both documents only counts
+#                    as correct when both contributed a passage.
+#                    `answer_includes_each` (checked only with ANSWERS=1): the
+#                    answer must contain something from every group.
+#   expect: refuse — neither document answers it.
+#
+# The documents deliberately disagree on how long you have to report damage
+# (7 days in the returns policy, 14 in the shipping policy), to check that the
+# answer gives both rather than picking one.
+#
+# Run with: bin/rails eval:run FILE=eval/northwind_policies.yml
+
+documents:
+  returns:
+    title: Northwind Outfitters returns policy
+    content: |-
+      Returns and refunds
+
+      You can return most items within 30 days of delivery for a full refund to your original payment method. Items must be unworn, unwashed and have their original tags attached. Footwear must be returned in its original box.
+
+      How to start a return
+      Sign in to your account, open the order, and choose "Return items". Print the prepaid label and drop the parcel at any Northwind store or partner courier point. If you checked out as a guest, email returns@northwind.example with your order number and we will send you a label within one business day.
+
+      When you'll get your money back
+      Once your return reaches our warehouse, we inspect it within 2 business days. Refunds are then processed within 5-7 business days. Your bank may take a further 3-5 days to show the credit. You'll get an email at each step.
+
+      Shipping costs
+      Original shipping charges are not refunded unless the item arrived damaged or we sent the wrong item. Return shipping is free for orders over $75; for smaller orders, $6.95 is deducted from your refund.
+
+      Items we can't take back
+      Gift cards, personalised items, swimwear with the hygiene liner removed, and anything marked "Final sale" can't be returned. Digital products such as trail map downloads are non-refundable once downloaded.
+
+      Exchanges
+      We don't offer direct exchanges. Return the item for a refund and place a new order; if the size you want sells out in the meantime, we can't hold stock for you.
+
+      Damaged or faulty items
+      If something arrives damaged, contact us within 7 days with a photo. We'll send a replacement or a full refund, including the original shipping, and you won't need to return the damaged item.
+
+      Warranty
+      Tents, packs and sleeping bags carry a 2-year warranty against manufacturing defects. Normal wear, accidents and misuse are not covered. Warranty claims are handled by repair first; if a repair isn't possible we replace the item.
+
+  shipping:
+    title: Northwind Outfitters shipping and delivery
+    content: |-
+      Shipping and delivery
+
+      Delivery options
+      Standard delivery takes 3-5 business days and costs $5.95. It's free on orders over $75. Express delivery takes 1-2 business days and costs $14.95. Orders placed before 2 pm Eastern time on a business day leave our warehouse the same day; later orders leave the next business day.
+
+      Where we deliver
+      We deliver to all 50 US states and to Canada. Canadian orders take 5-10 business days, and import duties and taxes are charged at checkout, so there's nothing to pay on arrival. We don't ship outside the United States and Canada yet. Express delivery isn't available to P.O. boxes or APO/FPO addresses.
+
+      Tracking your order
+      When your parcel leaves the warehouse we email you a tracking link. Tracking can take up to 24 hours to show the first scan. Large orders may arrive in more than one parcel; you only pay delivery once, and each parcel gets its own tracking link.
+
+      Changing your order or address
+      You can change the delivery address or cancel your order within 1 hour of placing it, from the order page in your account. After that it's already being packed, and once a parcel has shipped we can't redirect it.
+
+      Late or missing parcels
+      If tracking says your parcel was delivered but you can't find it, check with neighbours and wait 48 hours, as couriers sometimes mark parcels delivered early. Then contact us and we'll open a claim with the courier. Once the claim is confirmed, usually within 10 business days, we send a replacement or a refund.
+
+      Damaged in transit
+      If your parcel arrives damaged, report it within 14 days of delivery. Keep the box and packaging, and send photos of both the box and the item; the courier needs these for the claim.
+
+      Kayaks, canoes and other large items
+      Kayaks, canoes and roof boxes ship by freight in 7-14 business days. The freight company calls you to book a delivery appointment, and someone aged 18 or over must be there to sign. Freight delivery has a $49 surcharge, even on orders over $75.
+
+cases:
+  # --- Need both documents ---------------------------------------------------
+  - question: If I return something, is the original shipping refunded? And how long does standard delivery take?
+    expect: answer
+    passages:
+      returns: Original shipping charges are not refunded
+      shipping: Standard delivery takes 3-5 business days
+    answer_includes_each: [["not", "n't"], ["3-5", "3 to 5", "three to five"]]
+
+  - question: I live in Canada. Can you deliver to me, and how long do I have to return an order?
+    expect: answer
+    passages:
+      returns: within 30 days of delivery
+      shipping: and to Canada
+    answer_includes_each: [["yes", "5-10", "5 to 10", "deliver"], ["30 days", "30-day", "thirty days"]]
+
+  - question: How much do I need to spend to get free delivery and free return shipping?
+    expect: answer
+    passages:
+      returns: Return shipping is free for orders over $75
+      shipping: It's free on orders over $75
+    answer_includes_each: [["$75", "75"]]
+
+  - question: My parcel arrived damaged. How many days do I have to report it?
+    expect: answer
+    passages:
+      returns: contact us within 7 days with a photo
+      shipping: report it within 14 days of delivery
+    answer_includes_each: [["7 days", "seven days"], ["14 days", "fourteen days"]]
+
+  - question: If I order a tent with express delivery, when will it arrive and how long is its warranty?
+    expect: answer
+    passages:
+      returns: 2-year warranty
+      shipping: Express delivery takes 1-2 business days
+    answer_includes_each: [["1-2", "1 to 2", "one to two"], ["2-year", "2 year", "two-year", "two year", "2 years", "two years"]]
+
+  - question: Can I swap a kayak for a different model, and how are kayaks delivered?
+    expect: answer
+    passages:
+      returns: We don't offer direct exchanges
+      shipping: ship by freight
+    answer_includes_each: [["exchange"], ["freight"]]
+
+  - question: Can I cancel my order, and if it has already arrived, can I still send it back?
+    expect: answer
+    passages:
+      returns: within 30 days of delivery
+      shipping: cancel your order within 1 hour
+    answer_includes_each: [["1 hour", "one hour", "an hour"], ["30 days", "30-day", "thirty days"]]
+
+  # --- Need one document, but both are searched -------------------------------
+  - question: How long does express delivery take?
+    expect: answer
+    passages:
+      shipping: Express delivery takes 1-2 business days
+    answer_includes_each: [["1-2", "1 to 2", "one to two"]]
+
+  - question: Can I change my delivery address after ordering?
+    expect: answer
+    passages:
+      shipping: within 1 hour of placing it
+    answer_includes_each: [["1 hour", "one hour", "an hour"]]
+
+  - question: When will I get a tracking link?
+    expect: answer
+    passages:
+      shipping: we email you a tracking link
+    answer_includes_each: [["email", "leaves the warehouse"]]
+
+  - question: Do you deliver to the UK?
+    expect: answer
+    passages:
+      shipping: We don't ship outside the United States and Canada yet
+    answer_includes_each: [["no", "don't", "not"]]
+
+  - question: Is there an extra charge for delivering a canoe?
+    expect: answer
+    passages:
+      shipping: $49 surcharge
+    answer_includes_each: [["$49", "49"]]
+
+  - question: Can I return swimwear?
+    expect: answer
+    passages:
+      returns: swimwear with the hygiene liner removed
+    answer_includes_each: [["liner", "hygiene"]]
+
+  - question: I checked out as a guest. How do I start a return?
+    expect: answer
+    passages:
+      returns: returns@northwind.example
+    answer_includes_each: [["returns@northwind.example", "email"]]
+
+  - question: Does the warranty cover accidental damage?
+    expect: answer
+    passages:
+      returns: accidents and misuse are not covered
+    answer_includes_each: [["not", "no"]]
+
+  # --- Neither document answers these ----------------------------------------
+  - question: Can I collect my order from a store?
+    expect: refuse
+    kind: in_domain
+
+  - question: Do you offer gift wrapping?
+    expect: refuse
+    kind: in_domain
+
+  - question: Can I pay with PayPal?
+    expect: refuse
+    kind: in_domain
+
+  - question: Do you offer price matching?
+    expect: refuse
+    kind: in_domain
+
+  - question: Is there a loyalty programme?
+    expect: refuse
+    kind: in_domain
+
+  - question: Which courier company delivers express orders?
+    expect: refuse
+    kind: in_domain
+
+  - question: What is the capital of France?
+    expect: refuse
+    kind: off_topic
+
+  - question: How do I make sourdough bread?
+    expect: refuse
+    kind: off_topic
+
+  - question: Who won the 2022 World Cup?
+    expect: refuse
+    kind: off_topic
