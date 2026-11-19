@@ -14,15 +14,18 @@ module Api
                store: RATE_LIMIT_STORE, with: -> { render_rate_limited }
 
     # POST /api/documents
+    # Either JSON { title, content } or a multipart upload with `file` (PDF,
+    # TXT or Markdown) and an optional `title` (defaults to the file name).
     # Oversized or blank content fails model validation and is rendered as 422
     # by ApplicationController.
     def create
-      document = Llm::Ingestor.new.call(
-        title: params.require(:title),
-        content: params.require(:content)
-      )
-      render json: { id: document.id, status: document.status, chunks: document.chunks.size },
+      title, content = document_input
+      document = Llm::Ingestor.new.call(title: title, content: content)
+      render json: { id: document.id, title: document.title, status: document.status,
+                     chunks: document.chunks.size },
              status: :accepted
+    rescue TextExtractor::Unreadable => e
+      render json: { error: "unreadable_file", detail: e.message }, status: :unprocessable_entity
     end
 
     # GET /api/documents/:id
@@ -45,6 +48,20 @@ module Api
       render json: result
     rescue Llm::Client::Error => e
       render json: { error: "summarization_failed", detail: e.message }, status: :bad_gateway
+    end
+
+    private
+
+    def document_input
+      file = params[:file]
+      return [params.require(:title), params.require(:content)] if file.blank?
+
+      unless file.respond_to?(:original_filename)
+        raise TextExtractor::Unreadable, "Send the file as a multipart upload in the `file` field."
+      end
+
+      extracted = TextExtractor.new.call(io: file.tempfile, filename: file.original_filename)
+      [params[:title].presence || extracted[:title], extracted[:content]]
     end
   end
 end
