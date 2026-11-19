@@ -1,78 +1,80 @@
 # frozen_string_literal: true
 
 module Llm
-  # The "generation" half of RAG: take retrieved chunks, build a grounded
-  # prompt, ask the model, and return the answer with its sources.
+  # Turns a question into the most relevant passages using vector similarity.
+  # This is the "retrieval" half of retrieval-augmented generation.
   #
-  # Key behaviour: the prompt instructs the model to answer ONLY from the
-  # provided context and to say when the answer is not present. This is what
-  # keeps it from hallucinating.
-  class Answerer
-    class Result
-      attr_reader :answer, :sources, :tokens_used
+  # Searches one document or several. The interface is deliberately tiny (one
+  # public method) so that swapping pgvector for Pinecone/Qdrant later touches
+  # only this class.
+  class Retriever
+    DEFAULT_TOP_K = 4
+    # Searching several documents at once returns a few more passages, so each
+    # document has room to contribute.
+    MULTI_DOCUMENT_TOP_K = AppSetting.integer(:retrieval, :multi_document_top_k, default: 6)
 
-      def initialize(answer:, sources:, tokens_used:)
-        @answer = answer
-        @sources = sources
-        @tokens_used = tokens_used
-      end
+    # Nearest-neighbour search always returns *something*, even for a question
+    # the document has nothing to do with. Passages farther than this cosine
+    # distance (0 = same meaning, 1 = unrelated) are dropped, so an off-topic
+    # question retrieves nothing and the answerer refuses without calling the
+    # model. Choose it with `bin/rails eval:run`; false turns the cutoff off.
+    MAX_DISTANCE = AppSetting.optional(:retrieval, :max_distance, env: "RETRIEVAL_MAX_DISTANCE",
+                                       default: 0.6) { |v| Float(v) }
 
-      def to_h
-        {
-          answer: answer,
-          sources: sources.map { |c| { chunk_id: c.id, excerpt: c.content.truncate(200) } },
-          tokens_used: tokens_used
-        }
-      end
-    end
-
-    SYSTEM_PROMPT = <<~PROMPT
-      You are a precise assistant. Answer the user's question using ONLY the
-      context provided. If the answer is not contained in the context, say
-      "I don't have enough information to answer that from the provided
-      documents." Do not use outside knowledge. Be concise.
-    PROMPT
-
-    def initialize(client: Llm::Client.new, retriever: Llm::Retriever.new)
+    def initialize(client: Llm::Client.new, logger: Rails.logger)
       @client = client
-      @retriever = retriever
+      @logger = logger
     end
 
-    def call(document_id:, question:)
-      chunks = @retriever.relevant_chunks(document_id: document_id, question: question)
+    # Returns an Array of Chunk records relevant to the question, closest
+    # first, each with #neighbor_distance and its document preloaded. May be
+    # empty. Pass document_id: for one document or document_ids: for several.
+    def relevant_chunks(question:, document_id: nil, document_ids: nil, top_k: nil, max_distance: MAX_DISTANCE)
+      ids = Array(document_ids || document_id).map(&:to_i).uniq
+      raise ArgumentError, "pass document_id: or document_ids:" if ids.empty?
 
-      if chunks.empty?
-        return Result.new(
-          answer: "I don't have enough information to answer that from the provided documents.",
-          sources: [],
-          tokens_used: 0
-        )
-      end
+      top_k ||= ids.size > 1 ? MULTI_DOCUMENT_TOP_K : DEFAULT_TOP_K
+      query_vector = @client.embed(question, input_type: "query")
 
-      context = build_context(chunks)
-      response = @client.chat_with_usage(
-        system: SYSTEM_PROMPT,
-        user: user_prompt(question, context)
-      )
+      # One query per document, so every document's closest passages are
+      # considered, rather than whichever document dominates a single query.
+      candidates = ids.flat_map { |id| nearest_in(id, query_vector, top_k) }
 
-      Result.new(answer: response[:text], sources: chunks, tokens_used: response[:tokens_used])
+      selected = select_passages(candidates, top_k: top_k, max_distance: max_distance)
+      @logger.info("[Llm::Retriever] documents=#{ids.join(',')} kept=#{selected.size}/#{candidates.size} " \
+                     "distances=#{candidates.map { |c| c.neighbor_distance.round(3) }.sort.join(',')}")
+      selected
     end
 
     private
 
-    def build_context(chunks)
-      chunks.map.with_index(1) do |chunk, i|
-        "[#{i}] #{chunk.content}"
-      end.join("\n\n")
+    def nearest_in(document_id, query_vector, limit)
+      Chunk
+        .where(document_id: document_id)
+        .where.not(embedding: nil)
+        .nearest_neighbors(:embedding, query_vector, distance: "cosine")
+        .limit(limit)
+        .preload(:document)
+        .to_a
     end
 
-    def user_prompt(question, context)
-      <<~PROMPT
-        Context:
-        #{context}
+    # Keeps passages within the cutoff, then picks up to top_k of them. Each
+    # document's best passage is guaranteed a place, so a question comparing
+    # two documents isn't answered from only one of them; the remaining slots
+    # go to the closest passages overall.
+    def select_passages(candidates, top_k:, max_distance:)
+      kept = candidates
+               .select { |c| max_distance.nil? || c.neighbor_distance <= max_distance }
+               .sort_by(&:neighbor_distance)
 
-        Question: #{question}
-      PROMPT
+      best_per_document = kept.group_by(&:document_id).values.map(&:first)
+      chosen = best_per_document.first(top_k)
+      (kept - chosen).each do |chunk|
+        break if chosen.size >= top_k
+
+        chosen << chunk
+      end
+      chosen.sort_by(&:neighbor_distance)
     end
   end
 end
