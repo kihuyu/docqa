@@ -1,13 +1,13 @@
 # DocQA
 
-Ask questions about a document and get answers drawn only from its text, with
-the exact passages each answer came from highlighted in place.
+Ask questions about one document or several, and get answers drawn only from
+their text, with the exact passages each answer came from highlighted in place.
 
 **Live demo:** https://docqa-fkc4.onrender.com
 *(Free hosting: the first request after 15 idle minutes takes about a minute to wake the app.)*
 
-DocQA is a Rails API with a small web page in front. You paste a document; it's
-split into passages, each passage is turned into a vector embedding and stored
+DocQA is a Rails API with a small web page in front. You upload a PDF or text
+file, or paste text; it's split into passages, each passage is turned into a vector embedding and stored
 in Postgres with pgvector. When you ask a question, the most similar passages
 are retrieved and handed to the model with instructions to answer from them
 alone. If no passage is close enough, the model isn't called at all and the
@@ -18,8 +18,11 @@ On a labelled set of 21 questions, it answers or refuses correctly on
 
 ## What it does
 
-- **Ask** a question about a document. The answer comes back with its source
-  passages, which are highlighted and numbered in the document text.
+- **Add documents** by uploading a PDF, TXT or Markdown file, or by pasting text.
+- **Ask** a question about a document, or about up to five at once. The answer
+  comes back with its source passages, which are highlighted and numbered in
+  the document text; with several documents, it says which document each part
+  came from, and points out where they disagree.
 - **Refuse** questions the document can't answer, without calling the model.
 - **Summarize** a document into an overview and key points.
 - **Index in the background**: adding a document returns immediately, and the
@@ -34,10 +37,12 @@ flowchart TB
     U([Web page<br/>public/index.html]) --> DC[Api::DocumentsController]
     U --> QC[Api::QueriesController]
 
+    DC -->|upload| TX[TextExtractor<br/>PDF, TXT, Markdown]
+    TX --> ING
     DC -->|add| ING[Llm::Ingestor<br/>split into passages]
     DC -->|summarize| SUM[Llm::Summarizer]
     QC --> ANS[Llm::Answerer<br/>grounded prompt]
-    ANS --> RET[Llm::Retriever<br/>top 4 within a distance cutoff]
+    ANS --> RET[Llm::Retriever<br/>closest passages within a cutoff,<br/>across one or more documents]
 
     ING -->|perform_later| JOB[[EmbedChunksJob]]
     JOB --> LLM
@@ -64,6 +69,7 @@ class, `Llm::Client`.
 - **Google Gemini**: `gemini-2.5-flash` for answers and summaries,
   `gemini-embedding-001` for embeddings (768 dimensions). One API key, called
   over plain HTTP; no SDK gem.
+- **pdf-reader** to extract text from uploaded PDFs (pure Ruby, no system libraries)
 - **Solid Queue** for background jobs, storing its queue in the same Postgres
   database, so there's no Redis
 - **RSpec**, with the model stubbed so tests are deterministic and free
@@ -115,6 +121,7 @@ gemini:
 
 retrieval:
   max_distance: 0.357                   # chosen by bin/rails eval:run (code default 0.6); false = no cutoff
+  multi_document_top_k: 6               # passages kept when searching several documents
 
 limits:
   max_question_chars: 1000
@@ -126,6 +133,9 @@ limits:
   documents_per_day: 50                 # whole site
   summaries_per_hour: 10                # per visitor
   document_ttl_hours: 24                # documents are deleted after this
+  max_documents_per_question: 5
+  max_upload_bytes: 10485760            # 10 MB
+  max_pdf_pages: 300
 
 database:
   url: postgresql://...                 # production only
@@ -150,10 +160,21 @@ The web page uses these endpoints, and you can call them directly.
 ```
 POST /api/documents
 { "title": "Refund Policy", "content": "..." }
--> 202 { "id": 1, "status": "processing", "chunks": 3 }
+-> 202 { "id": 1, "title": "Refund Policy", "status": "processing", "chunks": 3 }
 -> 422 content blank or too long
 -> 429 rate limited
 ```
+
+Or upload a file as `multipart/form-data`, with an optional `title` (it
+defaults to the file name):
+```
+curl -F file=@policy.pdf https://docqa-fkc4.onrender.com/api/documents
+-> 202 { "id": 2, "title": "policy", "status": "processing", "chunks": 14 }
+-> 422 { "error": "unreadable_file", "detail": "This PDF has no text to read. ..." }
+```
+PDF, TXT and Markdown are accepted, up to 10 MB and 300 pages. The type is
+decided from the file's contents, not its name or the browser's claim. PDFs need
+a text layer: scanned pages are images, and the app doesn't do OCR.
 
 ### Check indexing progress
 ```
@@ -168,14 +189,16 @@ failing after the job's retries.
 ```
 POST /api/queries
 { "document_id": 1, "question": "How long do refunds take?" }
+{ "document_ids": [1, 2], "question": "Is shipping refunded?" }      # up to 5 documents
 -> 200 {
      "answer": "Refunds are processed within 5-7 business days.",
-     "sources": [ { "chunk_id": 12, "excerpt": "first 200 chars...", "text": "full passage" } ],
+     "sources": [ { "chunk_id": 12, "document_id": 1, "document_title": "Refund Policy",
+                    "excerpt": "first 200 chars...", "text": "full passage" } ],
      "tokens_used": 842
    }
--> 404 unknown document
--> 409 { "error": "document_not_ready", "status": "processing" }
--> 422 question blank or too long
+-> 404 { "error": "not_found", "missing_document_ids": [2] }
+-> 409 { "error": "document_not_ready", "status": "processing", "not_ready_document_ids": [2] }
+-> 422 question blank or too long, or too many documents
 -> 429 rate limited
 -> 502 the model failed after retries
 ```
@@ -290,6 +313,15 @@ prompts. `MIN_ACCURACY=0.9` makes the task fail below that score, and
   live in one place, and provider errors are turned into a small set of
   retryable and non-retryable errors, so nothing else depends on Gemini's
   details.
+- **Every chosen document gets a say.** Searching several documents runs one
+  nearest-neighbour query per document, then guarantees each document's best
+  passage a place (if it passes the cutoff) before filling the remaining slots
+  with the closest passages overall. Without that, a question comparing two
+  documents could be answered entirely from whichever one happens to be
+  closer.
+- **Extract text, don't store files.** Uploads are turned into text on the
+  spot and discarded. There's nothing to store or serve back, and the rest of
+  the app treats an uploaded PDF exactly like pasted text.
 - **Passages break at word boundaries,** around 800 characters with 100
   characters of overlap, so no word is split and each passage can be located
   exactly in the document for highlighting.
@@ -305,7 +337,9 @@ bundle exec rspec
 ```
 
 The suite covers the client's retries, jitter, response parsing and error
-mapping; retrieval against real pgvector queries; chunking; the summarizer's
+mapping; retrieval against real pgvector queries, for one document and
+several; text extraction from PDFs (built on the fly by `spec/support/pdf_builder.rb`)
+and text files; chunking; the summarizer's
 parsing fallbacks; the embedding and purge jobs; rate limits; the evaluation
 scoring; and every endpoint's status codes. The workflow in `.github/workflows/ci.yml` runs it on
 every push against Postgres with pgvector.
@@ -369,7 +403,8 @@ restarts.
 ## What I'd add next
 
 - A longer evaluation document, where retrieval has real competition
-- Questions across several documents at once
+- OCR for scanned PDFs
+- Questions across several documents in the evaluation set
 - Unguessable document links instead of sequential numbers
 - Sentence-aware chunking
 - Batch embedding calls to make indexing long documents faster
