@@ -82,5 +82,27 @@ RSpec.describe Llm::Retriever do
     it "requires at least one document" do
       expect { retriever.relevant_chunks(question: "refunds?") }.to raise_error(ArgumentError)
     end
+
+    it "lists every candidate before the cutoff, closest first" do
+      found = retriever.candidates(document_ids: [document.id, shipping.id], question: "refunds?")
+
+      # "returns" and "shipping refunds" are equally close, so only the ends
+      # have a fixed order.
+      expect(found.map(&:content)).to contain_exactly("refunds", "returns", "shipping refunds", "parking")
+      expect([found.first.content, found.last.content]).to eq(%w[refunds parking])
+      expect(found.map(&:neighbor_distance)).to eq(found.map(&:neighbor_distance).sort)
+    end
+  end
+
+  describe ".select_passages" do
+    Recorded = Struct.new(:document_id, :neighbor_distance)
+
+    it "works on recorded distances, so the evaluation can replay it" do
+      recorded = [Recorded.new(:a, 0.1), Recorded.new(:a, 0.12), Recorded.new(:b, 0.3), Recorded.new(:b, 0.9)]
+
+      expect(described_class.select_passages(recorded, top_k: 2, max_distance: 0.5).map(&:to_a))
+        .to eq([[:a, 0.1], [:b, 0.3]])
+      expect(described_class.select_passages(recorded, top_k: 4, max_distance: 0.2).size).to eq(2)
+    end
   end
 end
