@@ -34,27 +34,27 @@ On a labelled set of 21 questions, it answers or refuses correctly on
 
 ```mermaid
 flowchart TB
-    U([Web page<br/>public/index.html]) --> DC[Api::DocumentsController]
-    U --> QC[Api::QueriesController]
+  U([Web page<br/>public/index.html]) --> DC[Api::DocumentsController]
+  U --> QC[Api::QueriesController]
 
-    DC -->|upload| TX[TextExtractor<br/>PDF, TXT, Markdown]
-    TX --> ING
-    DC -->|add| ING[Llm::Ingestor<br/>split into passages]
-    DC -->|summarize| SUM[Llm::Summarizer]
-    QC --> ANS[Llm::Answerer<br/>grounded prompt]
-    ANS --> RET[Llm::Retriever<br/>closest passages within a cutoff,<br/>across one or more documents]
+  DC -->|upload| TX[TextExtractor<br/>PDF, TXT, Markdown]
+  TX --> ING
+  DC -->|add| ING[Llm::Ingestor<br/>split into passages]
+  DC -->|summarize| SUM[Llm::Summarizer]
+  QC --> ANS[Llm::Answerer<br/>grounded prompt]
+  ANS --> RET[Llm::Retriever<br/>closest passages within a cutoff,<br/>across one or more documents]
 
-    ING -->|perform_later| JOB[[EmbedChunksJob]]
-    JOB --> LLM
-    RET --> LLM
-    ANS --> LLM
-    SUM --> LLM
-    LLM[Llm::Client<br/>retries, timeouts,<br/>token + latency logs] --> G[(Google Gemini<br/>chat + embeddings)]
+  ING -->|perform_later| JOB[[EmbedChunksJob]]
+  JOB --> LLM
+  RET --> LLM
+  ANS --> LLM
+  SUM --> LLM
+  LLM[Llm::Client<br/>retries, timeouts,<br/>token + latency logs] --> G[(Google Gemini<br/>chat + embeddings)]
 
-    ING --> PG[(Postgres + pgvector<br/>documents, passages, job queue)]
-    JOB --> PG
-    RET -->|cosine search| PG
-    PURGE[[PurgeOldDocumentsJob<br/>hourly]] --> PG
+  ING --> PG[(Postgres + pgvector<br/>documents, passages, job queue)]
+  JOB --> PG
+  RET -->|cosine search| PG
+  PURGE[[PurgeOldDocumentsJob<br/>hourly]] --> PG
 ```
 
 Everything stateful lives in one Postgres database: documents, passage
@@ -249,25 +249,44 @@ bin/rails llm:ping              # one real chat and embedding call, with the log
 
 ## Evaluation
 
-`eval/returns_policy.yml` holds 21 questions about the sample returns policy:
-12 it answers, each with the phrase its answer comes from, and 9 it doesn't.
-Of those 9, three are off-topic and six are on the same subject but not
-covered ("Do you ship to Canada?", "Do you offer price matching?"), which is
-where a relevance cutoff is most likely to go wrong.
+Three labelled sets in `eval/`, 75 questions in all:
+
+| File | Documents | Questions | What it tests |
+|---|---|---|---|
+| `returns_policy.yml` | returns policy (3 passages) | 21: 12 answerable, 9 not | Refusals: 3 off-topic, 6 on the same subject but not covered ("Do you ship to Canada?") |
+| `northwind_policies.yml` | returns + shipping policies (6 passages) | 24: 7 need both documents, 8 need one, 9 neither | Questions across several documents; one where the documents deliberately disagree (7 vs 14 days to report damage) |
+| `gear_care_guide.yml` | gear care guide (20 passages) | 30: 20 answerable, 10 not | Ranking among many similar passages, and whether the cutoff holds on a longer document |
 
 ```bash
-bin/rails eval:run              # retrieval and refusals: about 25 embedding calls
-ANSWERS=1 bin/rails eval:run    # also asks the model each question (about 2 minutes on the free tier)
+bin/rails eval:run                                    # every file: about 80 embedding calls
+bin/rails eval:run FILE=eval/northwind_policies.yml   # one file
+ANSWERS=1 bin/rails eval:run                          # also asks the model each question (slower on the free tier)
 ```
 
-It reports how often the passage containing the answer ranks first, which
-questions the app would answer when it should refuse (or the reverse), the
-share correct at every cutoff from 0.30 to 0.90, and a recommended cutoff.
-Distances are recorded once, so trying every cutoff costs no extra API calls.
-When two cutoffs tie, it picks the one that refuses rather than answers
-without support.
+For each question the run records every passage the search considers, with
+its document and distance, before any cutoff. The scorer then replays the
+retriever's own selection rule (`Llm::Retriever.select_passages`) at any
+cutoff, so trying cutoffs costs no extra API calls and sees exactly what the
+app would keep. It reports:
+
+- how often the passage containing the answer ranks first, and, when several
+  documents are searched, how often the closest passage comes from the right one
+- for questions that need several documents, whether **every needed document
+  contributed a passage**. An answer missing one counts as *incomplete*, not
+  correct, even though the app did answer
+- the share correct at each cutoff, which questions would be answered when they
+  should be refused (or the reverse), and a recommended cutoff, per file and
+  for all files together, since the app has one setting
+
+The recommended cutoff comes from the recorded distances, not a fixed grid:
+it is the midpoint of the widest gap that gives the best score, preferring
+cutoffs that refuse rather than answer without support. A file whose phrase
+isn't in any passage (a typo, or a phrase split across two passages) is
+rejected before any API call.
 
 ### Results
+
+`returns_policy.yml`:
 
 | Measure | Result |
 |---|---|
@@ -293,11 +312,18 @@ What the evaluation found:
 
 The sample is only three passages long, so ranking the right one first is
 easy; these numbers show the refusal logic works rather than that retrieval
-scales. A longer evaluation document is on the list below.
+scales. The two sets below test that.
+
+<!-- TODO: fill in from `bin/rails eval:run` -->
+| Measure | Several documents | Long document |
+|---|---|---|
+| Right passage ranked first | _ of 8 | _ of 20 |
+| Closest passage from the right document | _ of 8 | n/a |
+| Every needed document contributed (at 0.357) | _ of 7 | n/a |
+| Correct at the chosen cutoff (0.357) | _ of 24 | _ of 30 |
 
 Each run is saved to `tmp/eval/` for comparing changes to chunking, models or
-prompts. `MIN_ACCURACY=0.9` makes the task fail below that score, and
-`FILE=path` evaluates another document written in the same format.
+prompts. `MIN_ACCURACY=0.9` makes the task fail if any file scores below that.
 
 ## Design decisions
 
@@ -341,7 +367,7 @@ mapping; retrieval against real pgvector queries, for one document and
 several; text extraction from PDFs (built on the fly by `spec/support/pdf_builder.rb`)
 and text files; chunking; the summarizer's
 parsing fallbacks; the embedding and purge jobs; rate limits; the evaluation
-scoring; and every endpoint's status codes. The workflow in `.github/workflows/ci.yml` runs it on
+runner, scoring and report (and that every labelled phrase is in a passage); and every endpoint's status codes. The workflow in `.github/workflows/ci.yml` runs it on
 every push against Postgres with pgvector.
 
 ## Deploying (Render + Neon, $0)
@@ -402,9 +428,7 @@ restarts.
 
 ## What I'd add next
 
-- A longer evaluation document, where retrieval has real competition
 - OCR for scanned PDFs
-- Questions across several documents in the evaluation set
 - Unguessable document links instead of sequential numbers
 - Sentence-aware chunking
 - Batch embedding calls to make indexing long documents faster
