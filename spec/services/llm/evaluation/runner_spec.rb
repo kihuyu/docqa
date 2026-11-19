@@ -110,7 +110,8 @@ RSpec.describe Llm::Evaluation::Runner do
 
       expect(runner.documents).to eq("returns" => { title: "Returns", passages: 1 },
                                      "shipping" => { title: "Shipping", passages: 1 })
-      expect(both).to include(needs: %w[returns shipping], top_k: Llm::Retriever::MULTI_DOCUMENT_TOP_K, top_hit: nil)
+      expect(both).to include(needs: %w[returns shipping], top_k: Llm::Retriever::MULTI_DOCUMENT_TOP_K)
+      expect(both).not_to have_key(:top_hit) # ranking is only measured for one-passage questions
       expect(both[:candidates]).to eq([{ document: "returns", distance: 0.3, needed: true },
                                        { document: "shipping", distance: 0.41, needed: true }])
       expect(delivery).to include(top_hit: true, top_document_hit: true)
