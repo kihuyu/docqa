@@ -57,4 +57,30 @@ RSpec.describe Llm::Retriever do
     retriever.relevant_chunks(document_id: document.id, question: "refunds?")
     expect(client).to have_received(:embed).with("refunds?", input_type: "query")
   end
+
+  describe "across several documents" do
+    let(:shipping) { Document.create!(title: "Shipping", content: "body", status: "ready") }
+    let!(:shipping_best) { shipping.chunks.create!(content: "shipping refunds", embedding: between(0, 3)) }
+
+    it "searches every chosen document and preloads each passage's document" do
+      chunks = retriever.relevant_chunks(document_ids: [document.id, shipping.id], question: "refunds?", max_distance: 0.6)
+
+      expect(chunks.map(&:document_id).uniq).to contain_exactly(document.id, shipping.id)
+      expect(chunks.first.association(:document)).to be_loaded
+    end
+
+    it "gives each document's best passage a place even when another document fills the top" do
+      document.chunks.create!(content: "refunds again", embedding: unit_vector(0))
+
+      chunks = retriever.relevant_chunks(document_ids: [document.id, shipping.id], question: "refunds?",
+                                         top_k: 2, max_distance: 0.6)
+
+      expect(chunks).to include(shipping_best)
+      expect(chunks.size).to eq(2)
+    end
+
+    it "requires at least one document" do
+      expect { retriever.relevant_chunks(question: "refunds?") }.to raise_error(ArgumentError)
+    end
+  end
 end
