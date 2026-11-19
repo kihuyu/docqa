@@ -30,39 +30,41 @@ module Llm
     # first, each with #neighbor_distance and its document preloaded. May be
     # empty. Pass document_id: for one document or document_ids: for several.
     def relevant_chunks(question:, document_id: nil, document_ids: nil, top_k: nil, max_distance: MAX_DISTANCE)
-      ids = Array(document_ids || document_id).map(&:to_i).uniq
-      raise ArgumentError, "pass document_id: or document_ids:" if ids.empty?
+      ids = document_ids_from(document_ids || document_id)
+      top_k ||= self.class.top_k_for(ids.size)
+      found = candidates(question: question, document_ids: ids, top_k: top_k)
 
-      top_k ||= ids.size > 1 ? MULTI_DOCUMENT_TOP_K : DEFAULT_TOP_K
+      selected = self.class.select_passages(found, top_k: top_k, max_distance: max_distance)
+      @logger.info("[Llm::Retriever] documents=#{ids.join(',')} kept=#{selected.size}/#{found.size} " \
+                     "distances=#{found.map { |c| c.neighbor_distance.round(3) }.sort.join(',')}")
+      selected
+    end
+
+    # Every passage the search considers before the cutoff and the top_k
+    # limit: up to top_k from each document, closest first. The evaluation
+    # records these once, then replays select_passages at any cutoff.
+    def candidates(question:, document_ids:, top_k: nil)
+      ids = document_ids_from(document_ids)
+      top_k ||= self.class.top_k_for(ids.size)
       query_vector = @client.embed(question, input_type: "query")
 
       # One query per document, so every document's closest passages are
       # considered, rather than whichever document dominates a single query.
-      candidates = ids.flat_map { |id| nearest_in(id, query_vector, top_k) }
-
-      selected = select_passages(candidates, top_k: top_k, max_distance: max_distance)
-      @logger.info("[Llm::Retriever] documents=#{ids.join(',')} kept=#{selected.size}/#{candidates.size} " \
-                     "distances=#{candidates.map { |c| c.neighbor_distance.round(3) }.sort.join(',')}")
-      selected
+      ids.flat_map { |id| nearest_in(id, query_vector, top_k) }.sort_by(&:neighbor_distance)
     end
 
-    private
-
-    def nearest_in(document_id, query_vector, limit)
-      Chunk
-        .where(document_id: document_id)
-        .where.not(embedding: nil)
-        .nearest_neighbors(:embedding, query_vector, distance: "cosine")
-        .limit(limit)
-        .preload(:document)
-        .to_a
+    def self.top_k_for(document_count)
+      document_count > 1 ? MULTI_DOCUMENT_TOP_K : DEFAULT_TOP_K
     end
 
     # Keeps passages within the cutoff, then picks up to top_k of them. Each
     # document's best passage is guaranteed a place, so a question comparing
     # two documents isn't answered from only one of them; the remaining slots
     # go to the closest passages overall.
-    def select_passages(candidates, top_k:, max_distance:)
+    #
+    # Works on anything with #document_id and #neighbor_distance, so the
+    # evaluation can run it on recorded distances.
+    def self.select_passages(candidates, top_k:, max_distance:)
       kept = candidates
                .select { |c| max_distance.nil? || c.neighbor_distance <= max_distance }
                .sort_by(&:neighbor_distance)
@@ -75,6 +77,25 @@ module Llm
         chosen << chunk
       end
       chosen.sort_by(&:neighbor_distance)
+    end
+
+    private
+
+    def document_ids_from(raw)
+      ids = Array(raw).map(&:to_i).uniq
+      raise ArgumentError, "pass document_id: or document_ids:" if ids.empty?
+
+      ids
+    end
+
+    def nearest_in(document_id, query_vector, limit)
+      Chunk
+        .where(document_id: document_id)
+        .where.not(embedding: nil)
+        .nearest_neighbors(:embedding, query_vector, distance: "cosine")
+        .limit(limit)
+        .preload(:document)
+        .to_a
     end
   end
 end
