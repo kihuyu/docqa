@@ -13,8 +13,10 @@ are retrieved and handed to the model with instructions to answer from them
 alone. If no passage is close enough, the model isn't called at all and the
 answer says the document doesn't cover it.
 
-On a labelled set of 21 questions, it answers or refuses correctly on
-**21 of 21** (see [Evaluation](#evaluation)).
+On 75 labelled questions across three test sets, it answers or refuses
+correctly on **65 (87%)**: 21 of 21 on a short policy, and lower on questions
+that span two documents or come from a long guide. The
+[Evaluation](#evaluation) section explains why.
 
 ## What it does
 
@@ -34,27 +36,27 @@ On a labelled set of 21 questions, it answers or refuses correctly on
 
 ```mermaid
 flowchart TB
-  U([Web page<br/>public/index.html]) --> DC[Api::DocumentsController]
-  U --> QC[Api::QueriesController]
+    U([Web page<br/>public/index.html]) --> DC[Api::DocumentsController]
+    U --> QC[Api::QueriesController]
 
-  DC -->|upload| TX[TextExtractor<br/>PDF, TXT, Markdown]
-  TX --> ING
-  DC -->|add| ING[Llm::Ingestor<br/>split into passages]
-  DC -->|summarize| SUM[Llm::Summarizer]
-  QC --> ANS[Llm::Answerer<br/>grounded prompt]
-  ANS --> RET[Llm::Retriever<br/>closest passages within a cutoff,<br/>across one or more documents]
+    DC -->|upload| TX[TextExtractor<br/>PDF, TXT, Markdown]
+    TX --> ING
+    DC -->|add| ING[Llm::Ingestor<br/>split into passages]
+    DC -->|summarize| SUM[Llm::Summarizer]
+    QC --> ANS[Llm::Answerer<br/>grounded prompt]
+    ANS --> RET[Llm::Retriever<br/>closest passages within a cutoff,<br/>across one or more documents]
 
-  ING -->|perform_later| JOB[[EmbedChunksJob]]
-  JOB --> LLM
-  RET --> LLM
-  ANS --> LLM
-  SUM --> LLM
-  LLM[Llm::Client<br/>retries, timeouts,<br/>token + latency logs] --> G[(Google Gemini<br/>chat + embeddings)]
+    ING -->|perform_later| JOB[[EmbedChunksJob]]
+    JOB --> LLM
+    RET --> LLM
+    ANS --> LLM
+    SUM --> LLM
+    LLM[Llm::Client<br/>retries, timeouts,<br/>token + latency logs] --> G[(Google Gemini<br/>chat + embeddings)]
 
-  ING --> PG[(Postgres + pgvector<br/>documents, passages, job queue)]
-  JOB --> PG
-  RET -->|cosine search| PG
-  PURGE[[PurgeOldDocumentsJob<br/>hourly]] --> PG
+    ING --> PG[(Postgres + pgvector<br/>documents, passages, job queue)]
+    JOB --> PG
+    RET -->|cosine search| PG
+    PURGE[[PurgeOldDocumentsJob<br/>hourly]] --> PG
 ```
 
 Everything stateful lives in one Postgres database: documents, passage
@@ -314,13 +316,37 @@ The sample is only three passages long, so ranking the right one first is
 easy; these numbers show the refusal logic works rather than that retrieval
 scales. The two sets below test that.
 
-<!-- TODO: fill in from `bin/rails eval:run` -->
-| Measure | Several documents | Long document |
+| Measure (cutoff 0.357) | Several documents | Long document |
 |---|---|---|
-| Right passage ranked first | _ of 8 | _ of 20 |
-| Closest passage from the right document | _ of 8 | n/a |
-| Every needed document contributed (at 0.357) | _ of 7 | n/a |
-| Correct at the chosen cutoff (0.357) | _ of 24 | _ of 30 |
+| Right passage ranked first | 8 of 8 | 15 of 20 |
+| Closest passage from the right document | 8 of 8 | n/a |
+| Two-document questions with both documents | 4 of 7 | n/a |
+| Correct overall | 20 of 24 | 24 of 30 |
+| Answered when it should have refused | 1 of 9 | 2 of 10 |
+
+What these found:
+
+- **Two-part questions sit just past the cutoff.** A question with two parts
+  is a little further from each passage it needs. For the 3 that lost a
+  document, that document's closest passage scored 0.362 to 0.369, just past
+  0.357. A cutoff of 0.37 includes all three, but "Do you offer gift wrapping?"
+  scores 0.370, so there is no margin. Searching each part of the question
+  separately would fix this without loosening the cutoff.
+- **On the long guide, no cutoff separates the two groups.** Two questions the
+  guide doesn't answer score closer than four it does: "How do I store a bike
+  over the winter?" (0.348) is near the guide's section on storing gear for the
+  season, while "Does the water filter remove viruses?" (0.430) is answered
+  inside a long passage that is mostly about backflushing and freezing. The best
+  cutoff gets 26 of 30.
+- **Ranking holds up, but not perfectly.** With 20 similar passages, the right
+  one ranks first 15 times out of 20. The other 5 rank second or third, so
+  they're still among the four passages sent to the model when they're within
+  the cutoff.
+- **What the cutoff can and can't do.** Every off-topic question scores 0.466
+  or more in all three sets, so the cutoff reliably blocks those without calling
+  the model. For questions on the right subject that the document doesn't
+  answer, the cutoff alone isn't enough; those have to be refused by the model,
+  following the prompt.
 
 Each run is saved to `tmp/eval/` for comparing changes to chunking, models or
 prompts. `MIN_ACCURACY=0.9` makes the task fail if any file scores below that.
@@ -428,6 +454,11 @@ restarts.
 
 ## What I'd add next
 
+- Search each part of a multi-part question separately, so every needed
+  document contributes a passage
+- Keyword search alongside vector search, for exact terms such as "$85" or "C7"
+- Measure the model's own refusals (`ANSWERS=1`), then treat the cutoff as a
+  filter for off-topic questions only
 - OCR for scanned PDFs
 - Unguessable document links instead of sequential numbers
 - Sentence-aware chunking
