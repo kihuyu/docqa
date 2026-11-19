@@ -15,7 +15,7 @@ RSpec.describe "POST /api/queries", type: :request do
   before do
     allow_any_instance_of(Llm::Retriever).to receive(:relevant_chunks).and_return([chunk])
     allow_any_instance_of(Llm::Client).to receive(:chat_with_usage)
-      .and_return({ text: "Refunds take 5-7 business days.", tokens_used: 842 })
+                                            .and_return({ text: "Refunds take 5-7 business days.", tokens_used: 842 })
   end
 
   it "returns a grounded answer with sources and token usage" do
@@ -65,9 +65,48 @@ RSpec.describe "POST /api/queries", type: :request do
     expect(JSON.parse(response.body)).to include("error" => "document_not_ready", "status" => "processing")
   end
 
+  describe "with several documents" do
+    let(:shipping) { Document.create!(title: "Shipping", content: "body", status: "ready") }
+
+    it "searches all of them" do
+      expect_any_instance_of(Llm::Answerer).to receive(:call)
+                                                 .with(document_ids: [document.id, shipping.id], question: "Is shipping refunded?")
+                                                 .and_call_original
+
+      post "/api/queries", params: { document_ids: [document.id, shipping.id], question: "Is shipping refunded?" }
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "names documents that no longer exist" do
+      post "/api/queries", params: { document_ids: [document.id, 0], question: "Q?" }
+
+      expect(response).to have_http_status(:not_found)
+      expect(JSON.parse(response.body)["missing_document_ids"]).to eq([0])
+    end
+
+    it "names documents that are still being indexed" do
+      shipping.update!(status: "processing")
+
+      post "/api/queries", params: { document_ids: [document.id, shipping.id], question: "Q?" }
+
+      expect(response).to have_http_status(:conflict)
+      expect(JSON.parse(response.body)["not_ready_document_ids"]).to eq([shipping.id])
+    end
+
+    it "rejects too many documents or ids that aren't numbers" do
+      ids = Array.new(Api::QueriesController::MAX_DOCUMENTS + 1) { |i| i + 1 }
+      post "/api/queries", params: { document_ids: ids, question: "Q?" }
+      expect(response).to have_http_status(:unprocessable_entity)
+
+      post "/api/queries", params: { document_ids: ["abc"], question: "Q?" }
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
+
   it "returns 502 when the model is unavailable" do
     allow_any_instance_of(Llm::Client).to receive(:chat_with_usage)
-      .and_raise(Llm::Client::Error, "down")
+                                            .and_raise(Llm::Client::Error, "down")
 
     post "/api/queries", params: { document_id: document.id, question: "anything?" }
     expect(response).to have_http_status(:bad_gateway)
